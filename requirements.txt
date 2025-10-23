@@ -1,0 +1,33 @@
+# FastAPI и серверные зависимости
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# База данных
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+
+# Аутентификация
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+
+# Валидация
+pydantic==2.5.0
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+email-validator==2.1.0
+
+# AI и обработка изображений
+openai>=1.0,<2.0
+httpx==0.27.2
+pillow==10.1.0
+pytesseract==0.3.10
+
+# Опционально для продакшена
+# redis==5.0.1
+# celery==5.3.4
+# cloudinary==1.37.0
+
+# Утилиты
+python-dateutil==2.8.2

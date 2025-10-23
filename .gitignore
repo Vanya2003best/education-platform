@@ -1,0 +1,50 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+.venv
+
+# FastAPI
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Переменные окружения
+.env
+.env.local
+
+# База данных
+*.db
+*.sqlite
+*.sqlite3
+
+# Загруженные файлы
+uploads/
+!uploads/.gitkeep
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Логи
+*.log
+logs/
+
+# Временные файлы
+tmp/
+temp/
+
+# Railway
+.railway/
