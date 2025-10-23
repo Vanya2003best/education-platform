@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Education Platform - Demo</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            color: white;
+            margin-bottom: 40px;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            margin-bottom: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+
+        .auth-section {
+            display: flex;
+            gap: 20px;
+        }
+
+        .auth-section > div {
+            flex: 1;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input, select, textarea {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #e0e0e0;
+            border-radius: 6px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input:focus, select:focus, textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        .status {
+            padding: 15px;
+            border-radius: 6px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .task-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+            gap: 20px;
+        }
+
+        .task-card {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .task-card h3 {
+            margin-bottom: 10px;
+            color: #333;
+        }
+
+        .task-card .difficulty {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .difficulty-1 { background: #d4edda; color: #155724; }
+        .difficulty-2 { background: #fff3cd; color: #856404; }
+        .difficulty-3 { background: #f8d7da; color: #721c24; }
+
+        .hidden {
+            display: none;
+        }
+
+        .upload-area {
+            border: 2px dashed #667eea;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+
+        .upload-area:hover {
+            background: #f8f9fa;
+        }
+
+        .preview-image {
+            max-width: 300px;
+            margin-top: 15px;
+            border-radius: 8px;
+        }
+
+        .user-stats {
+            display: flex;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-card {
+            flex: 1;
+            min-width: 150px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+
+        .stat-card .value {
+            font-size: 2em;
+            font-weight: bold;
+        }
+
+        .stat-card .label {
+            font-size: 0.9em;
+            opacity: 0.9;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🎓 Education Platform</h1>
+            <p>AI-powered handwriting checker</p>
+        </div>
+
+        <!-- Аутентификация -->
+        <div id="authSection" class="card">
+            <h2>Вход / Регистрация</h2>
+            <div class="auth-section">
+                <div>
+                    <h3>Вход</h3>
+                    <div class="form-group">
+                        <label>Логин:</label>
+                        <input type="text" id="loginUsername" placeholder="student1">
+                    </div>
+                    <div class="form-group">
+                        <label>Пароль:</label>
+                        <input type="password" id="loginPassword" placeholder="student123">
+                    </div>
+                    <button onclick="login()">Войти</button>
+                </div>
+
+                <div>
+                    <h3>Регистрация</h3>
+                    <div class="form-group">
+                        <label>Логин:</label>
+                        <input type="text" id="regUsername" placeholder="минимум 3 символа" minlength="3" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email:</label>
+                        <input type="email" id="regEmail" placeholder="example@email.com" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Пароль:</label>
+                        <input type="password" id="regPassword" placeholder="минимум 6 символов" minlength="6" required>
+                    </div>
+                    <button onclick="register()">Зарегистрироваться</button>
+                </div>
+            </div>
+            <div id="authStatus" class="status"></div>
+        </div>
+
+        <!-- Главное меню -->
+        <div id="mainSection" class="hidden">
+            <!-- Статистика пользователя -->
+            <div class="card">
+                <h2>Ваша статистика</h2>
+                <div class="user-stats">
+                    <div class="stat-card">
+                        <div class="value" id="userCoins">0</div>
+                        <div class="label">Монет</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value" id="userLevel">1</div>
+                        <div class="label">Уровень</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value" id="userTasks">0</div>
+                        <div class="label">Заданий</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="value" id="userScore">0</div>
+                        <div class="label">Средний балл</div>
+                    </div>
+                </div>
+                <button onclick="logout()" style="margin-top: 20px;">Выйти</button>
+            </div>
+
+            <!-- Список заданий -->
+            <div class="card">
+                <h2>Доступные задания</h2>
+                <div id="taskList" class="task-list"></div>
+            </div>
+
+            <!-- Форма сдачи задания -->
+            <div id="submitSection" class="card hidden">
+                <h2>Сдать задание</h2>
+                <h3 id="selectedTaskTitle"></h3>
+                <p id="selectedTaskDescription"></p>
+
+                <div class="form-group">
+                    <label>Загрузите фото вашего решения:</label>
+                    <div class="upload-area" onclick="document.getElementById('photoInput').click()">
+                        <p>📸 Нажмите или перетащите фото</p>
+                        <p style="font-size: 0.9em; opacity: 0.7;">Поддерживаются: JPG, PNG (макс. 10 МБ)</p>
+                    </div>
+                    <input type="file" id="photoInput" accept="image/*" style="display: none;" onchange="previewImage(this)">
+                    <img id="preview" class="preview-image" style="display: none;">
+                </div>
+
+                <button onclick="submitTask()">Отправить на проверку</button>
+                <button onclick="cancelSubmit()" style="background: #6c757d; margin-left: 10px;">Отмена</button>
+
+                <div id="submitStatus" class="status"></div>
+            </div>
+
+            <!-- Мои сдачи -->
+            <div class="card">
+                <h2>Мои сдачи</h2>
+                <button onclick="loadSubmissions()">Обновить</button>
+                <div id="submissionList" style="margin-top: 20px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Автоматически определяем правильный URL
+        const API_URL = window.location.origin;
+        let token = localStorage.getItem('token');
+        let selectedTaskId = null;
+
+        // Проверяем токен при загрузке
+        if (token) {
+            loadUserData();
+        }
+
+        async function login() {
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+
+            if (!username || !password) {
+                showStatus('authStatus', 'error', 'Введите логин и пароль');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    token = data.access_token;
+                    localStorage.setItem('token', token);
+                    showStatus('authStatus', 'success', 'Вход выполнен успешно!');
+                    loadUserData();
+                } else {
+                    let errorMessage = 'Ошибка входа';
+                    if (data.detail) {
+                        errorMessage = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+                    }
+                    showStatus('authStatus', 'error', errorMessage);
+                }
+            } catch (error) {
+                showStatus('authStatus', 'error', 'Ошибка соединения с сервером: ' + error.message);
+            }
+        }
+
+        async function register() {
+            const username = document.getElementById('regUsername').value;
+            const email = document.getElementById('regEmail').value;
+            const password = document.getElementById('regPassword').value;
+
+            // Валидация на клиенте
+            if (!username || username.length < 3) {
+                showStatus('authStatus', 'error', 'Логин должен быть минимум 3 символа');
+                return;
+            }
+
+            if (!email || !email.includes('@')) {
+                showStatus('authStatus', 'error', 'Введите корректный email');
+                return;
+            }
+
+            if (!password || password.length < 6) {
+                showStatus('authStatus', 'error', 'Пароль должен быть минимум 6 символов');
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus('authStatus', 'success', 'Регистрация успешна! Теперь войдите.');
+                    // Очищаем поля
+                    document.getElementById('regUsername').value = '';
+                    document.getElementById('regEmail').value = '';
+                    document.getElementById('regPassword').value = '';
+                } else {
+                    // Обработка разных типов ошибок
+                    let errorMessage = 'Ошибка регистрации';
+
+                    if (data.detail) {
+                        // Если detail это строка
+                        if (typeof data.detail === 'string') {
+                            errorMessage = data.detail;
+                        }
+                        // Если detail это массив ошибок валидации (Pydantic)
+                        else if (Array.isArray(data.detail)) {
+                            errorMessage = data.detail.map(err =>
+                                `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`
+                            ).join('; ');
+                        }
+                        // Если detail это объект
+                        else {
+                            errorMessage = JSON.stringify(data.detail);
+                        }
+                    }
+
+                    showStatus('authStatus', 'error', errorMessage);
+                }
+            } catch (error) {
+                showStatus('authStatus', 'error', 'Ошибка соединения с сервером: ' + error.message);
+            }
+        }
+
+        async function loadUserData() {
+            try {
+                const response = await fetch(`${API_URL}/api/auth/me`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const user = await response.json();
+                    document.getElementById('userCoins').textContent = user.coins;
+                    document.getElementById('userLevel').textContent = user.level;
+                    document.getElementById('userTasks').textContent = user.tasks_completed;
+                    document.getElementById('userScore').textContent = user.average_score.toFixed(1);
+
+                    document.getElementById('authSection').classList.add('hidden');
+                    document.getElementById('mainSection').classList.remove('hidden');
+
+                    loadTasks();
+                    loadSubmissions();
+                } else {
+                    logout();
+                }
+            } catch (error) {
+                console.error('Error loading user data:', error);
+                logout();
+            }
+        }
+
+        async function loadTasks() {
+            try {
+                const response = await fetch(`${API_URL}/api/tasks`);
+                const tasks = await response.json();
+
+                const taskList = document.getElementById('taskList');
+                taskList.innerHTML = tasks.map(task => `
+                    <div class="task-card">
+                        <span class="difficulty difficulty-${task.difficulty}">Уровень ${task.difficulty}</span>
+                        <h3>${task.title}</h3>
+                        <p><strong>${task.subject}</strong></p>
+                        <p style="margin: 10px 0;">${task.description.substring(0, 100)}...</p>
+                        <p><strong>Награда:</strong> ${task.reward_coins} 💰 + ${task.reward_exp} ⭐</p>
+                        <button onclick="selectTask(${task.id}, '${task.title}', '${task.description}')">
+                            Выполнить
+                        </button>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading tasks:', error);
+            }
+        }
+
+        function selectTask(id, title, description) {
+            selectedTaskId = id;
+            document.getElementById('selectedTaskTitle').textContent = title;
+            document.getElementById('selectedTaskDescription').textContent = description;
+            document.getElementById('submitSection').classList.remove('hidden');
+            window.scrollTo({ top: document.getElementById('submitSection').offsetTop, behavior: 'smooth' });
+        }
+
+        function cancelSubmit() {
+            selectedTaskId = null;
+            document.getElementById('submitSection').classList.add('hidden');
+            document.getElementById('photoInput').value = '';
+            document.getElementById('preview').style.display = 'none';
+        }
+
+        function previewImage(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    const preview = document.getElementById('preview');
+                    preview.src = e.target.result;
+                    preview.style.display = 'block';
+                };
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        async function submitTask() {
+            const photoInput = document.getElementById('photoInput');
+
+            if (!photoInput.files[0]) {
+                showStatus('submitStatus', 'error', 'Выберите фото');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('task_id', selectedTaskId);
+            formData.append('photo', photoInput.files[0]);
+
+            showStatus('submitStatus', 'info', '⏳ Загрузка и проверка... Подождите 10-30 секунд');
+
+            try {
+                const response = await fetch(`${API_URL}/api/submissions/submit`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus('submitStatus', 'success',
+                        `✅ Работа принята! ID сдачи: ${data.id}. Проверка началась...`);
+
+                    // Ждем и проверяем статус
+                    setTimeout(() => checkSubmissionStatus(data.id), 3000);
+
+                    cancelSubmit();
+                    loadUserData();
+                } else {
+                    showStatus('submitStatus', 'error', data.detail || 'Ошибка отправки');
+                }
+            } catch (error) {
+                showStatus('submitStatus', 'error', 'Ошибка соединения');
+            }
+        }
+
+        async function checkSubmissionStatus(submissionId) {
+            try {
+                const response = await fetch(`${API_URL}/api/submissions/${submissionId}/status`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const data = await response.json();
+
+                if (data.status === 'checked') {
+                    alert(`✅ Проверка завершена!\n\nОценка: ${data.score}/100\n\nОбновите список сдач для просмотра деталей.`);
+                    loadSubmissions();
+                } else if (data.status === 'processing') {
+                    setTimeout(() => checkSubmissionStatus(submissionId), 3000);
+                }
+            } catch (error) {
+                console.error('Error checking status:', error);
+            }
+        }
+
+        async function loadSubmissions() {
+            try {
+                const response = await fetch(`${API_URL}/api/submissions/my-submissions`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                const submissions = await response.json();
+
+                const submissionList = document.getElementById('submissionList');
+
+                if (submissions.length === 0) {
+                    submissionList.innerHTML = '<p>У вас пока нет сдач</p>';
+                    return;
+                }
+
+                submissionList.innerHTML = submissions.map(sub => `
+                    <div class="task-card" style="margin-bottom: 15px;">
+                        <p><strong>ID:</strong> ${sub.id} | <strong>Статус:</strong> ${getStatusText(sub.status)}</p>
+                        <p><strong>Оценка:</strong> ${sub.score}/100</p>
+                        ${sub.coins_earned ? `<p><strong>Получено:</strong> ${sub.coins_earned} 💰 + ${sub.exp_earned} ⭐</p>` : ''}
+                        ${sub.ai_feedback ? `<p><strong>Отзыв:</strong> ${sub.ai_feedback}</p>` : ''}
+                        <p style="font-size: 0.9em; opacity: 0.7;">Отправлено: ${new Date(sub.submitted_at).toLocaleString('ru-RU')}</p>
+                    </div>
+                `).join('');
+            } catch (error) {
+                console.error('Error loading submissions:', error);
+            }
+        }
+
+        function getStatusText(status) {
+            const statusMap = {
+                'pending': '⏳ Ожидает',
+                'processing': '🔄 Обрабатывается',
+                'checked': '✅ Проверено',
+                'failed': '❌ Ошибка'
+            };
+            return statusMap[status] || status;
+        }
+
+        function logout() {
+            token = null;
+            localStorage.removeItem('token');
+            document.getElementById('authSection').classList.remove('hidden');
+            document.getElementById('mainSection').classList.add('hidden');
+        }
+
+        function showStatus(elementId, type, message) {
+            const statusEl = document.getElementById(elementId);
+            statusEl.textContent = message;
+            statusEl.className = `status ${type}`;
+            statusEl.style.display = 'block';
+
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+    </script>
+</body>
+</html>

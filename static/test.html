@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test - Education Platform</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .test-section {
+            background: white;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        .result {
+            margin-top: 10px;
+            padding: 10px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            font-size: 12px;
+        }
+        .success {
+            border-left: 4px solid #28a745;
+        }
+        .error {
+            border-left: 4px solid #dc3545;
+        }
+        input {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        h1 {
+            color: #333;
+        }
+        h3 {
+            color: #667eea;
+            margin-top: 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 API Тестирование - Education Platform</h1>
+
+    <div class="test-section">
+        <h3>1. Health Check</h3>
+        <button onclick="testHealth()">Проверить здоровье API</button>
+        <div id="health-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>2. Регистрация</h3>
+        <input type="text" id="test-username" placeholder="Логин (мин. 3 символа)" value="testuser123">
+        <input type="email" id="test-email" placeholder="Email" value="test@example.com">
+        <input type="password" id="test-password" placeholder="Пароль (мин. 6 символов)" value="password123">
+        <button onclick="testRegister()">Зарегистрировать</button>
+        <div id="register-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>3. Вход</h3>
+        <input type="text" id="login-username" placeholder="Логин" value="student1">
+        <input type="password" id="login-password" placeholder="Пароль" value="student123">
+        <button onclick="testLogin()">Войти</button>
+        <div id="login-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>4. Получить задания</h3>
+        <button onclick="testGetTasks()">Получить задания</button>
+        <div id="tasks-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>5. Получить товары</h3>
+        <button onclick="testGetShop()">Получить товары</button>
+        <div id="shop-result" class="result" style="display:none;"></div>
+    </div>
+
+    <div class="test-section">
+        <h3>6. Мой профиль (требуется токен)</h3>
+        <button onclick="testGetProfile()">Получить профиль</button>
+        <div id="profile-result" class="result" style="display:none;"></div>
+    </div>
+
+    <script>
+        // Автоматически определяем правильный URL
+        const API_URL = window.location.origin;
+        let token = localStorage.getItem('token');
+
+        function showResult(elementId, data, isError = false) {
+            const el = document.getElementById(elementId);
+            el.style.display = 'block';
+            el.className = 'result ' + (isError ? 'error' : 'success');
+            el.textContent = JSON.stringify(data, null, 2);
+        }
+
+        async function testHealth() {
+            try {
+                const response = await fetch(`${API_URL}/health`);
+                const data = await response.json();
+                showResult('health-result', { status: response.status, data }, false);
+            } catch (error) {
+                showResult('health-result', { error: error.message }, true);
+            }
+        }
+
+        async function testRegister() {
+            const username = document.getElementById('test-username').value;
+            const email = document.getElementById('test-email').value;
+            const password = document.getElementById('test-password').value;
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/register`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, email, password })
+                });
+
+                const data = await response.json();
+                showResult('register-result', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    data
+                }, !response.ok);
+            } catch (error) {
+                showResult('register-result', { error: error.message }, true);
+            }
+        }
+
+        async function testLogin() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+
+            const formData = new FormData();
+            formData.append('username', username);
+            formData.append('password', password);
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/login`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    token = data.access_token;
+                    localStorage.setItem('token', token);
+                }
+
+                showResult('login-result', {
+                    status: response.status,
+                    data,
+                    saved_token: response.ok ? 'Токен сохранен!' : 'Токен не сохранен'
+                }, !response.ok);
+            } catch (error) {
+                showResult('login-result', { error: error.message }, true);
+            }
+        }
+
+        async function testGetTasks() {
+            try {
+                const response = await fetch(`${API_URL}/api/tasks`);
+                const data = await response.json();
+                showResult('tasks-result', {
+                    status: response.status,
+                    count: data.length,
+                    data: data.slice(0, 3) // Показываем только первые 3
+                }, !response.ok);
+            } catch (error) {
+                showResult('tasks-result', { error: error.message }, true);
+            }
+        }
+
+        async function testGetShop() {
+            try {
+                const response = await fetch(`${API_URL}/api/shop/items`);
+                const data = await response.json();
+                showResult('shop-result', {
+                    status: response.status,
+                    count: data.length,
+                    data: data.slice(0, 3)
+                }, !response.ok);
+            } catch (error) {
+                showResult('shop-result', { error: error.message }, true);
+            }
+        }
+
+        async function testGetProfile() {
+            if (!token) {
+                showResult('profile-result', { error: 'Токен не найден. Сначала войдите!' }, true);
+                return;
+            }
+
+            try {
+                const response = await fetch(`${API_URL}/api/auth/me`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                const data = await response.json();
+                showResult('profile-result', { status: response.status, data }, !response.ok);
+            } catch (error) {
+                showResult('profile-result', { error: error.message }, true);
+            }
+        }
+    </script>
+</body>
+</html>
