@@ -3,627 +3,936 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Education Platform - Demo</title>
+    <title>Education Platform - AI Проверка Работ</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- Alpine.js для реактивности -->
+    <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+    <!-- Font Awesome для иконок -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Custom styles -->
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+        /* Анимации */
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
         }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        .fade-in {
+            animation: fadeIn 0.3s ease-out;
+        }
+
+        /* Градиенты */
+        .gradient-bg {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
         }
 
-        .container {
-            max-width: 1200px;
-            margin: 0 auto;
-        }
-
-        .header {
-            text-align: center;
-            color: white;
-            margin-bottom: 40px;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-        }
-
-        .card {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            margin-bottom: 20px;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        .auth-section {
-            display: flex;
-            gap: 20px;
-        }
-
-        .auth-section > div {
-            flex: 1;
-        }
-
-        .form-group {
-            margin-bottom: 15px;
-        }
-
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: 600;
-            color: #333;
-        }
-
-        input, select, textarea {
-            width: 100%;
-            padding: 10px;
-            border: 2px solid #e0e0e0;
-            border-radius: 6px;
-            font-size: 14px;
-            transition: border-color 0.3s;
-        }
-
-        input:focus, select:focus, textarea:focus {
-            outline: none;
-            border-color: #667eea;
-        }
-
-        button {
+        .gradient-text {
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: transform 0.2s;
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
         }
 
-        button:hover {
-            transform: translateY(-2px);
+        /* Скроллбар */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
         }
 
-        button:active {
-            transform: translateY(0);
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
         }
 
-        .status {
-            padding: 15px;
-            border-radius: 6px;
-            margin-top: 15px;
-            display: none;
+        ::-webkit-scrollbar-thumb {
+            background: #667eea;
+            border-radius: 10px;
         }
 
-        .status.success {
-            background: #d4edda;
-            color: #155724;
-            border: 1px solid #c3e6cb;
+        /* Загрузка */
+        .loader {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
         }
 
-        .status.error {
-            background: #f8d7da;
-            color: #721c24;
-            border: 1px solid #f5c6cb;
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
-        .status.info {
-            background: #d1ecf1;
-            color: #0c5460;
-            border: 1px solid #bee5eb;
+        /* Карточки */
+        .card-hover {
+            transition: all 0.3s;
         }
 
-        .task-list {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
         }
 
-        .task-card {
-            background: #f8f9fa;
-            padding: 20px;
-            border-radius: 8px;
-            border-left: 4px solid #667eea;
+        /* Progress bar */
+        .progress-bar {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            background-size: 200% 100%;
+            animation: shimmer 2s linear infinite;
         }
 
-        .task-card h3 {
-            margin-bottom: 10px;
-            color: #333;
-        }
-
-        .task-card .difficulty {
-            display: inline-block;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-bottom: 10px;
-        }
-
-        .difficulty-1 { background: #d4edda; color: #155724; }
-        .difficulty-2 { background: #fff3cd; color: #856404; }
-        .difficulty-3 { background: #f8d7da; color: #721c24; }
-
-        .hidden {
-            display: none;
-        }
-
-        .upload-area {
-            border: 2px dashed #667eea;
-            border-radius: 8px;
-            padding: 40px;
-            text-align: center;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-
-        .upload-area:hover {
-            background: #f8f9fa;
-        }
-
-        .preview-image {
-            max-width: 300px;
-            margin-top: 15px;
-            border-radius: 8px;
-        }
-
-        .user-stats {
-            display: flex;
-            gap: 20px;
-            flex-wrap: wrap;
-        }
-
-        .stat-card {
-            flex: 1;
-            min-width: 150px;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 20px;
-            border-radius: 8px;
-            text-align: center;
-        }
-
-        .stat-card .value {
-            font-size: 2em;
-            font-weight: bold;
-        }
-
-        .stat-card .label {
-            font-size: 0.9em;
-            opacity: 0.9;
+        @keyframes shimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
         }
     </style>
 </head>
-<body>
-    <div class="container">
-        <div class="header">
-            <h1>🎓 Education Platform</h1>
-            <p>AI-powered handwriting checker</p>
-        </div>
+<body class="bg-gray-50" x-data="app()" x-init="init()">
 
-        <!-- Аутентификация -->
-        <div id="authSection" class="card">
-            <h2>Вход / Регистрация</h2>
-            <div class="auth-section">
-                <div>
-                    <h3>Вход</h3>
-                    <div class="form-group">
-                        <label>Логин:</label>
-                        <input type="text" id="loginUsername" placeholder="student1">
-                    </div>
-                    <div class="form-group">
-                        <label>Пароль:</label>
-                        <input type="password" id="loginPassword" placeholder="student123">
-                    </div>
-                    <button onclick="login()">Войти</button>
+    <!-- Навигация -->
+    <nav class="bg-white shadow-lg sticky top-0 z-50">
+        <div class="container mx-auto px-4">
+            <div class="flex justify-between items-center py-4">
+                <div class="flex items-center space-x-4">
+                    <h1 class="text-2xl font-bold gradient-text">
+                        <i class="fas fa-graduation-cap"></i> Education Platform
+                    </h1>
                 </div>
 
-                <div>
-                    <h3>Регистрация</h3>
-                    <div class="form-group">
-                        <label>Логин:</label>
-                        <input type="text" id="regUsername" placeholder="минимум 3 символа" minlength="3" required>
+                <div class="flex items-center space-x-6" x-show="user">
+                    <!-- Статистика в навбаре -->
+                    <div class="hidden md:flex items-center space-x-4">
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-coins text-yellow-500"></i>
+                            <span class="font-semibold" x-text="user?.coins || 0"></span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <i class="fas fa-star text-purple-500"></i>
+                            <span class="font-semibold">Ур. <span x-text="user?.level || 1"></span></span>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Email:</label>
-                        <input type="email" id="regEmail" placeholder="example@email.com" required>
+
+                    <!-- Профиль -->
+                    <div class="relative" x-data="{ showProfile: false }">
+                        <button @click="showProfile = !showProfile"
+                                class="flex items-center space-x-2 bg-gray-100 rounded-full px-4 py-2 hover:bg-gray-200 transition">
+                            <img src="https://ui-avatars.com/api/?background=667eea&color=fff&name="
+                                 :src="'https://ui-avatars.com/api/?background=667eea&color=fff&name=' + (user?.username || 'U')"
+                                 class="w-8 h-8 rounded-full">
+                            <span x-text="user?.username || 'Гость'"></span>
+                            <i class="fas fa-chevron-down text-sm"></i>
+                        </button>
+
+                        <div x-show="showProfile" @click.away="showProfile = false"
+                             x-transition
+                             class="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-xl py-2">
+                            <a href="#" @click="showProfile = false; activeTab = 'profile'"
+                               class="block px-4 py-2 hover:bg-gray-100">
+                                <i class="fas fa-user mr-2"></i> Профиль
+                            </a>
+                            <a href="#" @click="showProfile = false; activeTab = 'achievements'"
+                               class="block px-4 py-2 hover:bg-gray-100">
+                                <i class="fas fa-trophy mr-2"></i> Достижения
+                            </a>
+                            <a href="#" @click="showProfile = false; activeTab = 'settings'"
+                               class="block px-4 py-2 hover:bg-gray-100">
+                                <i class="fas fa-cog mr-2"></i> Настройки
+                            </a>
+                            <hr class="my-2">
+                            <a href="#" @click="logout()" class="block px-4 py-2 hover:bg-gray-100 text-red-500">
+                                <i class="fas fa-sign-out-alt mr-2"></i> Выйти
+                            </a>
+                        </div>
                     </div>
-                    <div class="form-group">
-                        <label>Пароль:</label>
-                        <input type="password" id="regPassword" placeholder="минимум 6 символов" minlength="6" required>
-                    </div>
-                    <button onclick="register()">Зарегистрироваться</button>
                 </div>
             </div>
-            <div id="authStatus" class="status"></div>
+        </div>
+    </nav>
+
+    <!-- Контент -->
+    <div class="container mx-auto px-4 py-8">
+
+        <!-- Экран входа -->
+        <div x-show="!user" class="max-w-md mx-auto fade-in">
+            <div class="bg-white rounded-2xl shadow-xl p-8">
+                <h2 class="text-3xl font-bold text-center mb-8 gradient-text">
+                    Добро пожаловать!
+                </h2>
+
+                <!-- Табы -->
+                <div class="flex space-x-2 mb-6">
+                    <button @click="authMode = 'login'"
+                            :class="authMode === 'login' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'"
+                            class="flex-1 py-2 rounded-lg font-semibold transition">
+                        Вход
+                    </button>
+                    <button @click="authMode = 'register'"
+                            :class="authMode === 'register' ? 'bg-purple-600 text-white' : 'bg-gray-200 text-gray-700'"
+                            class="flex-1 py-2 rounded-lg font-semibold transition">
+                        Регистрация
+                    </button>
+                </div>
+
+                <!-- Форма входа -->
+                <form @submit.prevent="authMode === 'login' ? login() : register()" class="space-y-4">
+                    <div x-show="authMode === 'register'">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Email</label>
+                        <input type="email" x-model="authData.email"
+                               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                               placeholder="email@example.com">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Логин</label>
+                        <input type="text" x-model="authData.username"
+                               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                               placeholder="Ваш логин">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Пароль</label>
+                        <input type="password" x-model="authData.password"
+                               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
+                               placeholder="••••••••">
+                    </div>
+
+                    <button type="submit"
+                            class="w-full gradient-bg text-white py-3 rounded-lg font-semibold hover:opacity-90 transition">
+                        <span x-text="authMode === 'login' ? 'Войти' : 'Создать аккаунт'"></span>
+                    </button>
+                </form>
+
+                <!-- Demo вход -->
+                <div class="mt-6 text-center">
+                    <p class="text-sm text-gray-600">Тестовый вход:</p>
+                    <button @click="demoLogin()"
+                            class="text-purple-600 hover:text-purple-700 font-semibold">
+                        student1 / student123
+                    </button>
+                </div>
+
+                <!-- Ошибки -->
+                <div x-show="authError" class="mt-4 p-3 bg-red-100 text-red-700 rounded-lg text-sm">
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    <span x-text="authError"></span>
+                </div>
+            </div>
         </div>
 
-        <!-- Главное меню -->
-        <div id="mainSection" class="hidden">
+        <!-- Главный интерфейс -->
+        <div x-show="user" class="fade-in">
+
             <!-- Статистика пользователя -->
-            <div class="card">
-                <h2>Ваша статистика</h2>
-                <div class="user-stats">
-                    <div class="stat-card">
-                        <div class="value" id="userCoins">0</div>
-                        <div class="label">Монет</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="value" id="userLevel">1</div>
-                        <div class="label">Уровень</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="value" id="userTasks">0</div>
-                        <div class="label">Заданий</div>
-                    </div>
-                    <div class="stat-card">
-                        <div class="value" id="userScore">0</div>
-                        <div class="label">Средний балл</div>
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Монеты</p>
+                            <p class="text-3xl font-bold text-yellow-500" x-text="user?.coins || 0"></p>
+                        </div>
+                        <i class="fas fa-coins text-4xl text-yellow-400 opacity-30"></i>
                     </div>
                 </div>
-                <button onclick="logout()" style="margin-top: 20px;">Выйти</button>
-            </div>
 
-            <!-- Список заданий -->
-            <div class="card">
-                <h2>Доступные задания</h2>
-                <div id="taskList" class="task-list"></div>
-            </div>
-
-            <!-- Форма сдачи задания -->
-            <div id="submitSection" class="card hidden">
-                <h2>Сдать задание</h2>
-                <h3 id="selectedTaskTitle"></h3>
-                <p id="selectedTaskDescription"></p>
-
-                <div class="form-group">
-                    <label>Загрузите фото вашего решения:</label>
-                    <div class="upload-area" onclick="document.getElementById('photoInput').click()">
-                        <p>📸 Нажмите или перетащите фото</p>
-                        <p style="font-size: 0.9em; opacity: 0.7;">Поддерживаются: JPG, PNG (макс. 10 МБ)</p>
+                <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Уровень</p>
+                            <p class="text-3xl font-bold text-purple-500" x-text="user?.level || 1"></p>
+                        </div>
+                        <i class="fas fa-star text-4xl text-purple-400 opacity-30"></i>
                     </div>
-                    <input type="file" id="photoInput" accept="image/*" style="display: none;" onchange="previewImage(this)">
-                    <img id="preview" class="preview-image" style="display: none;">
+                    <div class="mt-2">
+                        <div class="w-full bg-gray-200 rounded-full h-2">
+                            <div class="progress-bar h-2 rounded-full"
+                                 :style="'width: ' + ((user?.experience % 100) || 0) + '%'"></div>
+                        </div>
+                    </div>
                 </div>
 
-                <button onclick="submitTask()">Отправить на проверку</button>
-                <button onclick="cancelSubmit()" style="background: #6c757d; margin-left: 10px;">Отмена</button>
+                <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Выполнено</p>
+                            <p class="text-3xl font-bold text-green-500" x-text="user?.tasks_completed || 0"></p>
+                        </div>
+                        <i class="fas fa-check-circle text-4xl text-green-400 opacity-30"></i>
+                    </div>
+                </div>
 
-                <div id="submitStatus" class="status"></div>
+                <div class="bg-white rounded-xl shadow-lg p-6 card-hover">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-gray-500 text-sm">Средний балл</p>
+                            <p class="text-3xl font-bold text-blue-500">
+                                <span x-text="(user?.average_score || 0).toFixed(1)"></span>
+                            </p>
+                        </div>
+                        <i class="fas fa-chart-line text-4xl text-blue-400 opacity-30"></i>
+                    </div>
+                </div>
             </div>
 
-            <!-- Мои сдачи -->
-            <div class="card">
-                <h2>Мои сдачи</h2>
-                <button onclick="loadSubmissions()">Обновить</button>
-                <div id="submissionList" style="margin-top: 20px;"></div>
+            <!-- Табы -->
+            <div class="bg-white rounded-xl shadow-lg mb-8">
+                <div class="flex flex-wrap border-b">
+                    <button @click="activeTab = 'tasks'"
+                            :class="activeTab === 'tasks' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'"
+                            class="px-6 py-4 font-semibold hover:text-purple-600 transition">
+                        <i class="fas fa-tasks mr-2"></i> Задания
+                    </button>
+                    <button @click="activeTab = 'submissions'; loadSubmissions()"
+                            :class="activeTab === 'submissions' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'"
+                            class="px-6 py-4 font-semibold hover:text-purple-600 transition">
+                        <i class="fas fa-paper-plane mr-2"></i> Мои работы
+                    </button>
+                    <button @click="activeTab = 'shop'; loadShop()"
+                            :class="activeTab === 'shop' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'"
+                            class="px-6 py-4 font-semibold hover:text-purple-600 transition">
+                        <i class="fas fa-shopping-cart mr-2"></i> Магазин
+                    </button>
+                    <button @click="activeTab = 'leaderboard'; loadLeaderboard()"
+                            :class="activeTab === 'leaderboard' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'"
+                            class="px-6 py-4 font-semibold hover:text-purple-600 transition">
+                        <i class="fas fa-trophy mr-2"></i> Рейтинг
+                    </button>
+                    <button @click="activeTab = 'achievements'"
+                            :class="activeTab === 'achievements' ? 'border-b-2 border-purple-600 text-purple-600' : 'text-gray-600'"
+                            class="px-6 py-4 font-semibold hover:text-purple-600 transition">
+                        <i class="fas fa-medal mr-2"></i> Достижения
+                    </button>
+                </div>
+
+                <div class="p-6">
+
+                    <!-- Задания -->
+                    <div x-show="activeTab === 'tasks'" class="fade-in">
+                        <div class="mb-6 flex flex-wrap gap-4">
+                            <select @change="filterTasks()" x-model="filters.subject"
+                                    class="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <option value="">Все предметы</option>
+                                <option value="Математика">Математика</option>
+                                <option value="Физика">Физика</option>
+                                <option value="Литература">Литература</option>
+                                <option value="Химия">Химия</option>
+                            </select>
+
+                            <select @change="filterTasks()" x-model="filters.difficulty"
+                                    class="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                                <option value="">Любая сложность</option>
+                                <option value="1">⭐ Легко</option>
+                                <option value="2">⭐⭐ Средне</option>
+                                <option value="3">⭐⭐⭐ Сложно</option>
+                            </select>
+                        </div>
+
+                        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                            <template x-for="task in filteredTasks" :key="task.id">
+                                <div class="bg-gray-50 rounded-xl p-6 card-hover cursor-pointer"
+                                     @click="selectTask(task)">
+                                    <div class="flex justify-between items-start mb-3">
+                                        <span class="inline-block px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-sm font-semibold"
+                                              x-text="task.subject"></span>
+                                        <div class="flex items-center">
+                                            <template x-for="i in task.difficulty">
+                                                <i class="fas fa-star text-yellow-400 text-sm"></i>
+                                            </template>
+                                        </div>
+                                    </div>
+
+                                    <h3 class="text-lg font-bold mb-2" x-text="task.title"></h3>
+                                    <p class="text-gray-600 text-sm mb-4 line-clamp-3"
+                                       x-text="task.description"></p>
+
+                                    <div class="flex justify-between items-center">
+                                        <div class="flex space-x-3">
+                                            <span class="text-sm">
+                                                <i class="fas fa-coins text-yellow-500"></i>
+                                                <span x-text="task.reward_coins"></span>
+                                            </span>
+                                            <span class="text-sm">
+                                                <i class="fas fa-star text-purple-500"></i>
+                                                <span x-text="task.reward_exp"></span> XP
+                                            </span>
+                                        </div>
+                                        <button class="gradient-bg text-white px-4 py-2 rounded-lg text-sm font-semibold hover:opacity-90">
+                                            Выполнить
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div x-show="filteredTasks.length === 0" class="text-center py-12">
+                            <i class="fas fa-inbox text-6xl text-gray-300 mb-4"></i>
+                            <p class="text-gray-500">Нет доступных заданий</p>
+                        </div>
+                    </div>
+
+                    <!-- Мои работы -->
+                    <div x-show="activeTab === 'submissions'" class="fade-in">
+                        <div class="space-y-4">
+                            <template x-for="submission in submissions" :key="submission.id">
+                                <div class="bg-gray-50 rounded-xl p-6">
+                                    <div class="flex justify-between items-start">
+                                        <div class="flex-1">
+                                            <div class="flex items-center space-x-4 mb-2">
+                                                <span class="text-sm text-gray-500">ID: #<span x-text="submission.id"></span></span>
+                                                <span :class="{
+                                                    'bg-yellow-100 text-yellow-700': submission.status === 'processing',
+                                                    'bg-green-100 text-green-700': submission.status === 'checked',
+                                                    'bg-red-100 text-red-700': submission.status === 'failed'
+                                                }"
+                                                      class="px-3 py-1 rounded-full text-sm font-semibold">
+                                                    <span x-text="getStatusText(submission.status)"></span>
+                                                </span>
+                                            </div>
+
+                                            <div x-show="submission.score !== null" class="mb-3">
+                                                <div class="flex items-center space-x-4">
+                                                    <div class="text-3xl font-bold"
+                                                         :class="submission.score >= 80 ? 'text-green-500' : submission.score >= 50 ? 'text-yellow-500' : 'text-red-500'">
+                                                        <span x-text="submission.score"></span>/100
+                                                    </div>
+                                                    <div class="text-sm text-gray-600">
+                                                        <i class="fas fa-coins text-yellow-500"></i>
+                                                        +<span x-text="submission.coins_earned"></span>
+                                                        <span class="ml-2">
+                                                            <i class="fas fa-star text-purple-500"></i>
+                                                            +<span x-text="submission.exp_earned"></span> XP
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            <p class="text-gray-700" x-text="submission.ai_feedback"></p>
+                                        </div>
+
+                                        <div class="ml-4">
+                                            <img :src="submission.photo_url"
+                                                 class="w-24 h-24 object-cover rounded-lg cursor-pointer hover:opacity-80"
+                                                 @click="showImage(submission.photo_url)">
+                                        </div>
+                                    </div>
+
+                                    <div class="mt-4 text-sm text-gray-500">
+                                        <i class="far fa-clock mr-1"></i>
+                                        <span x-text="formatDate(submission.submitted_at)"></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <div x-show="submissions.length === 0" class="text-center py-12">
+                            <i class="fas fa-folder-open text-6xl text-gray-300 mb-4"></i>
+                            <p class="text-gray-500">У вас пока нет сданных работ</p>
+                        </div>
+                    </div>
+
+                    <!-- Магазин -->
+                    <div x-show="activeTab === 'shop'" class="fade-in">
+                        <div class="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                            <template x-for="item in shopItems" :key="item.id">
+                                <div class="bg-gray-50 rounded-xl p-6 text-center card-hover">
+                                    <div class="text-6xl mb-4">
+                                        <span x-html="getItemIcon(item)"></span>
+                                    </div>
+                                    <h3 class="font-bold mb-2" x-text="item.name"></h3>
+                                    <p class="text-sm text-gray-600 mb-4" x-text="item.description"></p>
+                                    <div class="mb-4">
+                                        <span class="text-2xl font-bold text-yellow-500">
+                                            <i class="fas fa-coins text-lg"></i>
+                                            <span x-text="item.price"></span>
+                                        </span>
+                                    </div>
+                                    <button @click="purchaseItem(item)"
+                                            :disabled="user.coins < item.price"
+                                            :class="user.coins >= item.price ? 'gradient-bg hover:opacity-90' : 'bg-gray-300 cursor-not-allowed'"
+                                            class="w-full text-white py-2 rounded-lg font-semibold transition">
+                                        <span x-text="user.coins >= item.price ? 'Купить' : 'Недостаточно монет'"></span>
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Рейтинг -->
+                    <div x-show="activeTab === 'leaderboard'" class="fade-in">
+                        <div class="overflow-x-auto">
+                            <table class="w-full">
+                                <thead>
+                                    <tr class="border-b">
+                                        <th class="text-left py-3 px-4">Место</th>
+                                        <th class="text-left py-3 px-4">Пользователь</th>
+                                        <th class="text-center py-3 px-4">Уровень</th>
+                                        <th class="text-center py-3 px-4">Опыт</th>
+                                        <th class="text-center py-3 px-4">Выполнено</th>
+                                        <th class="text-center py-3 px-4">Ср. балл</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <template x-for="(entry, index) in leaderboard" :key="index">
+                                        <tr class="border-b hover:bg-gray-50">
+                                            <td class="py-3 px-4">
+                                                <span class="text-2xl" x-html="getRankIcon(entry.rank)"></span>
+                                            </td>
+                                            <td class="py-3 px-4 font-semibold" x-text="entry.username"></td>
+                                            <td class="text-center py-3 px-4">
+                                                <span class="font-bold text-purple-600" x-text="entry.level"></span>
+                                            </td>
+                                            <td class="text-center py-3 px-4" x-text="entry.experience"></td>
+                                            <td class="text-center py-3 px-4" x-text="entry.tasks_completed"></td>
+                                            <td class="text-center py-3 px-4">
+                                                <span class="font-semibold" x-text="entry.average_score"></span>
+                                            </td>
+                                        </tr>
+                                    </template>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- Достижения -->
+                    <div x-show="activeTab === 'achievements'" class="fade-in">
+                        <div class="grid grid-cols-2 md:grid-cols-4 gap-6">
+                            <div class="text-center">
+                                <div class="text-6xl mb-2">🏆</div>
+                                <p class="font-semibold">Первая победа</p>
+                                <p class="text-sm text-gray-500">Выполните первое задание</p>
+                            </div>
+                            <div class="text-center opacity-50">
+                                <div class="text-6xl mb-2">⭐</div>
+                                <p class="font-semibold">Отличник</p>
+                                <p class="text-sm text-gray-500">Получите 100 баллов</p>
+                            </div>
+                            <div class="text-center opacity-50">
+                                <div class="text-6xl mb-2">🔥</div>
+                                <p class="font-semibold">В ударе</p>
+                                <p class="text-sm text-gray-500">7 дней подряд</p>
+                            </div>
+                            <div class="text-center opacity-50">
+                                <div class="text-6xl mb-2">💎</div>
+                                <p class="font-semibold">Коллекционер</p>
+                                <p class="text-sm text-gray-500">10 покупок в магазине</p>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Модальное окно для загрузки фото -->
+    <div x-show="selectedTask" @click.away="selectedTask = null"
+         x-transition
+         class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div class="bg-white rounded-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto" @click.stop>
+            <div class="p-6">
+                <div class="flex justify-between items-start mb-4">
+                    <h2 class="text-2xl font-bold" x-text="selectedTask?.title"></h2>
+                    <button @click="selectedTask = null" class="text-gray-400 hover:text-gray-600">
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+
+                <div class="mb-6">
+                    <p class="text-gray-700 whitespace-pre-wrap" x-text="selectedTask?.description"></p>
+                </div>
+
+                <div class="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center mb-4">
+                    <input type="file" id="photoInput" accept="image/*" class="hidden" @change="handleFileSelect">
+                    <label for="photoInput" class="cursor-pointer">
+                        <i class="fas fa-cloud-upload-alt text-6xl text-gray-400 mb-4"></i>
+                        <p class="text-lg font-semibold mb-2">Загрузите фото вашей работы</p>
+                        <p class="text-sm text-gray-500">JPG, PNG до 10 МБ</p>
+                    </label>
+
+                    <div x-show="selectedFile" class="mt-4">
+                        <img :src="previewUrl" class="max-w-full h-64 mx-auto rounded-lg">
+                        <p class="mt-2 text-sm text-gray-600" x-text="selectedFile?.name"></p>
+                    </div>
+                </div>
+
+                <div class="flex justify-end space-x-4">
+                    <button @click="selectedTask = null; selectedFile = null"
+                            class="px-6 py-2 bg-gray-200 text-gray-700 rounded-lg font-semibold hover:bg-gray-300">
+                        Отмена
+                    </button>
+                    <button @click="submitTask()"
+                            :disabled="!selectedFile || submitting"
+                            :class="selectedFile && !submitting ? 'gradient-bg hover:opacity-90' : 'bg-gray-300 cursor-not-allowed'"
+                            class="px-6 py-2 text-white rounded-lg font-semibold">
+                        <span x-show="!submitting">Отправить на проверку</span>
+                        <span x-show="submitting">
+                            <i class="fas fa-spinner fa-spin mr-2"></i> Отправка...
+                        </span>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
 
+    <!-- Уведомления -->
+    <div class="fixed bottom-4 right-4 z-50 space-y-2" id="notifications">
+        <!-- Уведомления добавляются динамически -->
+    </div>
+
     <script>
-        // Автоматически определяем правильный URL
-        const API_URL = window.location.origin;
-        let token = localStorage.getItem('token');
-        let selectedTaskId = null;
+        function app() {
+            return {
+                // API URL
+                apiUrl: window.location.origin + '/api',
 
-        // Проверяем токен при загрузке
-        if (token) {
-            loadUserData();
-        }
+                // Состояние
+                user: null,
+                token: localStorage.getItem('token'),
+                authMode: 'login',
+                authData: {
+                    username: '',
+                    email: '',
+                    password: ''
+                },
+                authError: '',
 
-        async function login() {
-            const username = document.getElementById('loginUsername').value;
-            const password = document.getElementById('loginPassword').value;
+                // UI
+                activeTab: 'tasks',
+                selectedTask: null,
+                selectedFile: null,
+                previewUrl: null,
+                submitting: false,
 
-            if (!username || !password) {
-                showStatus('authStatus', 'error', 'Введите логин и пароль');
-                return;
-            }
+                // Данные
+                tasks: [],
+                filteredTasks: [],
+                submissions: [],
+                shopItems: [],
+                leaderboard: [],
 
-            const formData = new FormData();
-            formData.append('username', username);
-            formData.append('password', password);
+                // Фильтры
+                filters: {
+                    subject: '',
+                    difficulty: ''
+                },
 
-            try {
-                const response = await fetch(`${API_URL}/api/auth/login`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    token = data.access_token;
-                    localStorage.setItem('token', token);
-                    showStatus('authStatus', 'success', 'Вход выполнен успешно!');
-                    loadUserData();
-                } else {
-                    let errorMessage = 'Ошибка входа';
-                    if (data.detail) {
-                        errorMessage = typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail);
+                // Инициализация
+                async init() {
+                    if (this.token) {
+                        await this.loadUserData();
                     }
-                    showStatus('authStatus', 'error', errorMessage);
-                }
-            } catch (error) {
-                showStatus('authStatus', 'error', 'Ошибка соединения с сервером: ' + error.message);
-            }
-        }
+                },
 
-        async function register() {
-            const username = document.getElementById('regUsername').value;
-            const email = document.getElementById('regEmail').value;
-            const password = document.getElementById('regPassword').value;
+                // Аутентификация
+                async login() {
+                    this.authError = '';
 
-            // Валидация на клиенте
-            if (!username || username.length < 3) {
-                showStatus('authStatus', 'error', 'Логин должен быть минимум 3 символа');
-                return;
-            }
+                    const formData = new FormData();
+                    formData.append('username', this.authData.username);
+                    formData.append('password', this.authData.password);
 
-            if (!email || !email.includes('@')) {
-                showStatus('authStatus', 'error', 'Введите корректный email');
-                return;
-            }
+                    try {
+                        const response = await fetch(`${this.apiUrl}/auth/login`, {
+                            method: 'POST',
+                            body: formData
+                        });
 
-            if (!password || password.length < 6) {
-                showStatus('authStatus', 'error', 'Пароль должен быть минимум 6 символов');
-                return;
-            }
+                        const data = await response.json();
 
-            try {
-                const response = await fetch(`${API_URL}/api/auth/register`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, email, password })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    showStatus('authStatus', 'success', 'Регистрация успешна! Теперь войдите.');
-                    // Очищаем поля
-                    document.getElementById('regUsername').value = '';
-                    document.getElementById('regEmail').value = '';
-                    document.getElementById('regPassword').value = '';
-                } else {
-                    // Обработка разных типов ошибок
-                    let errorMessage = 'Ошибка регистрации';
-
-                    if (data.detail) {
-                        // Если detail это строка
-                        if (typeof data.detail === 'string') {
-                            errorMessage = data.detail;
+                        if (response.ok) {
+                            this.token = data.access_token;
+                            localStorage.setItem('token', this.token);
+                            await this.loadUserData();
+                            this.showNotification('Вход выполнен успешно!', 'success');
+                        } else {
+                            this.authError = data.detail || 'Ошибка входа';
                         }
-                        // Если detail это массив ошибок валидации (Pydantic)
-                        else if (Array.isArray(data.detail)) {
-                            errorMessage = data.detail.map(err =>
-                                `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`
-                            ).join('; ');
+                    } catch (error) {
+                        this.authError = 'Ошибка соединения с сервером';
+                    }
+                },
+
+                async register() {
+                    this.authError = '';
+
+                    try {
+                        const response = await fetch(`${this.apiUrl}/auth/register`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                username: this.authData.username,
+                                email: this.authData.email,
+                                password: this.authData.password
+                            })
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.showNotification('Регистрация успешна! Теперь войдите', 'success');
+                            this.authMode = 'login';
+                            this.authData.email = '';
+                            this.authData.password = '';
+                        } else {
+                            this.authError = data.detail || 'Ошибка регистрации';
                         }
-                        // Если detail это объект
-                        else {
-                            errorMessage = JSON.stringify(data.detail);
+                    } catch (error) {
+                        this.authError = 'Ошибка соединения с сервером';
+                    }
+                },
+
+                async demoLogin() {
+                    this.authData.username = 'student1';
+                    this.authData.password = 'student123';
+                    await this.login();
+                },
+
+                logout() {
+                    this.token = null;
+                    this.user = null;
+                    localStorage.removeItem('token');
+                    this.showNotification('Вы вышли из системы', 'info');
+                },
+
+                // Загрузка данных
+                async loadUserData() {
+                    try {
+                        const response = await fetch(`${this.apiUrl}/auth/me`, {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+
+                        if (response.ok) {
+                            this.user = await response.json();
+                            await this.loadTasks();
+                        } else {
+                            this.logout();
                         }
+                    } catch (error) {
+                        console.error('Error loading user data:', error);
+                    }
+                },
+
+                async loadTasks() {
+                    try {
+                        const response = await fetch(`${this.apiUrl}/tasks`);
+                        this.tasks = await response.json();
+                        this.filterTasks();
+                    } catch (error) {
+                        console.error('Error loading tasks:', error);
+                    }
+                },
+
+                filterTasks() {
+                    this.filteredTasks = this.tasks.filter(task => {
+                        if (this.filters.subject && task.subject !== this.filters.subject) return false;
+                        if (this.filters.difficulty && task.difficulty != this.filters.difficulty) return false;
+                        return true;
+                    });
+                },
+
+                async loadSubmissions() {
+                    try {
+                        const response = await fetch(`${this.apiUrl}/submissions/my-submissions`, {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+                        this.submissions = await response.json();
+                    } catch (error) {
+                        console.error('Error loading submissions:', error);
+                    }
+                },
+
+                async loadShop() {
+                    try {
+                        const response = await fetch(`${this.apiUrl}/shop/items`);
+                        this.shopItems = await response.json();
+                    } catch (error) {
+                        console.error('Error loading shop:', error);
+                    }
+                },
+
+                async loadLeaderboard() {
+                    try {
+                        const response = await fetch(`${this.apiUrl}/coins/leaderboard`);
+                        this.leaderboard = await response.json();
+                    } catch (error) {
+                        console.error('Error loading leaderboard:', error);
+                    }
+                },
+
+                // Работа с заданиями
+                selectTask(task) {
+                    this.selectedTask = task;
+                    this.selectedFile = null;
+                    this.previewUrl = null;
+                },
+
+                handleFileSelect(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        this.selectedFile = file;
+
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.previewUrl = e.target.result;
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                },
+
+                async submitTask() {
+                    if (!this.selectedFile || this.submitting) return;
+
+                    this.submitting = true;
+
+                    const formData = new FormData();
+                    formData.append('task_id', this.selectedTask.id);
+                    formData.append('photo', this.selectedFile);
+
+                    try {
+                        const response = await fetch(`${this.apiUrl}/submissions/submit`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${this.token}` },
+                            body: formData
+                        });
+
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.showNotification('Работа отправлена на проверку!', 'success');
+                            this.selectedTask = null;
+                            this.selectedFile = null;
+
+                            // Проверяем статус через некоторое время
+                            setTimeout(() => this.checkSubmissionStatus(data.id), 5000);
+                        } else {
+                            this.showNotification(data.detail || 'Ошибка отправки', 'error');
+                        }
+                    } catch (error) {
+                        this.showNotification('Ошибка соединения', 'error');
+                    } finally {
+                        this.submitting = false;
+                    }
+                },
+
+                async checkSubmissionStatus(submissionId) {
+                    try {
+                        const response = await fetch(`${this.apiUrl}/submissions/${submissionId}/status`, {
+                            headers: { 'Authorization': `Bearer ${this.token}` }
+                        });
+
+                        const data = await response.json();
+
+                        if (data.status === 'checked') {
+                            this.showNotification(`Проверка завершена! Оценка: ${data.score}/100`, 'success');
+                            await this.loadUserData();
+                            await this.loadSubmissions();
+                        } else if (data.status === 'processing') {
+                            // Проверяем еще раз через 5 секунд
+                            setTimeout(() => this.checkSubmissionStatus(submissionId), 5000);
+                        }
+                    } catch (error) {
+                        console.error('Error checking status:', error);
+                    }
+                },
+
+                async purchaseItem(item) {
+                    if (this.user.coins < item.price) {
+                        this.showNotification('Недостаточно монет!', 'error');
+                        return;
                     }
 
-                    showStatus('authStatus', 'error', errorMessage);
-                }
-            } catch (error) {
-                showStatus('authStatus', 'error', 'Ошибка соединения с сервером: ' + error.message);
-            }
-        }
+                    try {
+                        const response = await fetch(`${this.apiUrl}/shop/purchase`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${this.token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({ item_id: item.id })
+                        });
 
-        async function loadUserData() {
-            try {
-                const response = await fetch(`${API_URL}/api/auth/me`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
+                        if (response.ok) {
+                            this.showNotification(`Вы купили "${item.name}"!`, 'success');
+                            await this.loadUserData();
+                        } else {
+                            const data = await response.json();
+                            this.showNotification(data.detail || 'Ошибка покупки', 'error');
+                        }
+                    } catch (error) {
+                        this.showNotification('Ошибка соединения', 'error');
                     }
-                });
+                },
 
-                if (response.ok) {
-                    const user = await response.json();
-                    document.getElementById('userCoins').textContent = user.coins;
-                    document.getElementById('userLevel').textContent = user.level;
-                    document.getElementById('userTasks').textContent = user.tasks_completed;
-                    document.getElementById('userScore').textContent = user.average_score.toFixed(1);
+                // Утилиты
+                showNotification(message, type = 'info') {
+                    const notification = document.createElement('div');
+                    notification.className = `p-4 rounded-lg shadow-lg fade-in ${
+                        type === 'success' ? 'bg-green-500' :
+                        type === 'error' ? 'bg-red-500' :
+                        'bg-blue-500'
+                    } text-white`;
+                    notification.innerHTML = `
+                        <div class="flex items-center">
+                            <i class="fas fa-${
+                                type === 'success' ? 'check-circle' :
+                                type === 'error' ? 'exclamation-circle' :
+                                'info-circle'
+                            } mr-3"></i>
+                            <span>${message}</span>
+                        </div>
+                    `;
 
-                    document.getElementById('authSection').classList.add('hidden');
-                    document.getElementById('mainSection').classList.remove('hidden');
+                    document.getElementById('notifications').appendChild(notification);
 
-                    loadTasks();
-                    loadSubmissions();
-                } else {
-                    logout();
+                    setTimeout(() => {
+                        notification.style.opacity = '0';
+                        setTimeout(() => notification.remove(), 300);
+                    }, 3000);
+                },
+
+                getStatusText(status) {
+                    const statusMap = {
+                        'pending': '⏳ Ожидает',
+                        'processing': '🔄 Проверяется',
+                        'checked': '✅ Проверено',
+                        'failed': '❌ Ошибка'
+                    };
+                    return statusMap[status] || status;
+                },
+
+                getItemIcon(item) {
+                    const icons = {
+                        'avatar': '👤',
+                        'badge': '🏅',
+                        'theme': '🎨',
+                        'power_up': '⚡',
+                        'hint': '💡'
+                    };
+                    return icons[item.item_type] || '📦';
+                },
+
+                getRankIcon(rank) {
+                    if (rank === 1) return '🥇';
+                    if (rank === 2) return '🥈';
+                    if (rank === 3) return '🥉';
+                    return `#${rank}`;
+                },
+
+                formatDate(dateString) {
+                    const date = new Date(dateString);
+                    return date.toLocaleString('ru-RU');
+                },
+
+                showImage(url) {
+                    window.open(url, '_blank');
                 }
-            } catch (error) {
-                console.error('Error loading user data:', error);
-                logout();
             }
-        }
-
-        async function loadTasks() {
-            try {
-                const response = await fetch(`${API_URL}/api/tasks`);
-                const tasks = await response.json();
-
-                const taskList = document.getElementById('taskList');
-                taskList.innerHTML = tasks.map(task => `
-                    <div class="task-card">
-                        <span class="difficulty difficulty-${task.difficulty}">Уровень ${task.difficulty}</span>
-                        <h3>${task.title}</h3>
-                        <p><strong>${task.subject}</strong></p>
-                        <p style="margin: 10px 0;">${task.description.substring(0, 100)}...</p>
-                        <p><strong>Награда:</strong> ${task.reward_coins} 💰 + ${task.reward_exp} ⭐</p>
-                        <button onclick="selectTask(${task.id}, '${task.title}', '${task.description}')">
-                            Выполнить
-                        </button>
-                    </div>
-                `).join('');
-            } catch (error) {
-                console.error('Error loading tasks:', error);
-            }
-        }
-
-        function selectTask(id, title, description) {
-            selectedTaskId = id;
-            document.getElementById('selectedTaskTitle').textContent = title;
-            document.getElementById('selectedTaskDescription').textContent = description;
-            document.getElementById('submitSection').classList.remove('hidden');
-            window.scrollTo({ top: document.getElementById('submitSection').offsetTop, behavior: 'smooth' });
-        }
-
-        function cancelSubmit() {
-            selectedTaskId = null;
-            document.getElementById('submitSection').classList.add('hidden');
-            document.getElementById('photoInput').value = '';
-            document.getElementById('preview').style.display = 'none';
-        }
-
-        function previewImage(input) {
-            if (input.files && input.files[0]) {
-                const reader = new FileReader();
-                reader.onload = function(e) {
-                    const preview = document.getElementById('preview');
-                    preview.src = e.target.result;
-                    preview.style.display = 'block';
-                };
-                reader.readAsDataURL(input.files[0]);
-            }
-        }
-
-        async function submitTask() {
-            const photoInput = document.getElementById('photoInput');
-
-            if (!photoInput.files[0]) {
-                showStatus('submitStatus', 'error', 'Выберите фото');
-                return;
-            }
-
-            const formData = new FormData();
-            formData.append('task_id', selectedTaskId);
-            formData.append('photo', photoInput.files[0]);
-
-            showStatus('submitStatus', 'info', '⏳ Загрузка и проверка... Подождите 10-30 секунд');
-
-            try {
-                const response = await fetch(`${API_URL}/api/submissions/submit`, {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: formData
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    showStatus('submitStatus', 'success',
-                        `✅ Работа принята! ID сдачи: ${data.id}. Проверка началась...`);
-
-                    // Ждем и проверяем статус
-                    setTimeout(() => checkSubmissionStatus(data.id), 3000);
-
-                    cancelSubmit();
-                    loadUserData();
-                } else {
-                    showStatus('submitStatus', 'error', data.detail || 'Ошибка отправки');
-                }
-            } catch (error) {
-                showStatus('submitStatus', 'error', 'Ошибка соединения');
-            }
-        }
-
-        async function checkSubmissionStatus(submissionId) {
-            try {
-                const response = await fetch(`${API_URL}/api/submissions/${submissionId}/status`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                const data = await response.json();
-
-                if (data.status === 'checked') {
-                    alert(`✅ Проверка завершена!\n\nОценка: ${data.score}/100\n\nОбновите список сдач для просмотра деталей.`);
-                    loadSubmissions();
-                } else if (data.status === 'processing') {
-                    setTimeout(() => checkSubmissionStatus(submissionId), 3000);
-                }
-            } catch (error) {
-                console.error('Error checking status:', error);
-            }
-        }
-
-        async function loadSubmissions() {
-            try {
-                const response = await fetch(`${API_URL}/api/submissions/my-submissions`, {
-                    headers: {
-                        'Authorization': `Bearer ${token}`
-                    }
-                });
-
-                const submissions = await response.json();
-
-                const submissionList = document.getElementById('submissionList');
-
-                if (submissions.length === 0) {
-                    submissionList.innerHTML = '<p>У вас пока нет сдач</p>';
-                    return;
-                }
-
-                submissionList.innerHTML = submissions.map(sub => `
-                    <div class="task-card" style="margin-bottom: 15px;">
-                        <p><strong>ID:</strong> ${sub.id} | <strong>Статус:</strong> ${getStatusText(sub.status)}</p>
-                        <p><strong>Оценка:</strong> ${sub.score}/100</p>
-                        ${sub.coins_earned ? `<p><strong>Получено:</strong> ${sub.coins_earned} 💰 + ${sub.exp_earned} ⭐</p>` : ''}
-                        ${sub.ai_feedback ? `<p><strong>Отзыв:</strong> ${sub.ai_feedback}</p>` : ''}
-                        <p style="font-size: 0.9em; opacity: 0.7;">Отправлено: ${new Date(sub.submitted_at).toLocaleString('ru-RU')}</p>
-                    </div>
-                `).join('');
-            } catch (error) {
-                console.error('Error loading submissions:', error);
-            }
-        }
-
-        function getStatusText(status) {
-            const statusMap = {
-                'pending': '⏳ Ожидает',
-                'processing': '🔄 Обрабатывается',
-                'checked': '✅ Проверено',
-                'failed': '❌ Ошибка'
-            };
-            return statusMap[status] || status;
-        }
-
-        function logout() {
-            token = null;
-            localStorage.removeItem('token');
-            document.getElementById('authSection').classList.remove('hidden');
-            document.getElementById('mainSection').classList.add('hidden');
-        }
-
-        function showStatus(elementId, type, message) {
-            const statusEl = document.getElementById(elementId);
-            statusEl.textContent = message;
-            statusEl.className = `status ${type}`;
-            statusEl.style.display = 'block';
-
-            setTimeout(() => {
-                statusEl.style.display = 'none';
-            }, 5000);
         }
     </script>
+
 </body>
 </html>
