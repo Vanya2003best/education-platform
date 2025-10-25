@@ -11,7 +11,7 @@ import json
 
 from app.database import get_db
 from app.models import Submission, Task, User, Transaction
-from app.services.ai_checker import checker
+from app.services.ai_checker import ai_checker
 from app.auth import get_current_user
 from app.schemas import SubmissionResponse, SubmissionDetail
 
@@ -117,7 +117,7 @@ async def process_submission(submission_id: int, file_path: str, task: Task):
             return
 
         # Запускаем AI проверку
-        result = await checker.check_photo_submission(
+        result = await ai_checker.check_photo_submission(
             photo_path=file_path,
             task_description=task.description,
             task_type=task.task_type,

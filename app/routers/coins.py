@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 from typing import List
 from datetime import datetime, timedelta
 
-from app.database import get_db
+from app.database import get_async_db
 from app.models import User, Transaction
 from app.auth import get_current_user
 
@@ -32,7 +32,7 @@ async def get_transactions(
         skip: int = 0,
         limit: int = 50,
         current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_async_db)
 ):
     """
     История транзакций
@@ -58,7 +58,7 @@ async def get_transactions(
 @router.get("/stats")
 async def get_user_stats(
         current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_async_db)
 ):
     """
     Статистика пользователя
@@ -109,7 +109,7 @@ async def get_user_stats(
 @router.get("/leaderboard")
 async def get_leaderboard(
         limit: int = 10,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_async_db)
 ):
     """
     Таблица лидеров по уровню и опыту
