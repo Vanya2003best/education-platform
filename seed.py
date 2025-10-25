@@ -2,9 +2,9 @@
 Скрипт для заполнения базы данных тестовыми данными
 Запуск: python seed.py
 """
-from app.database import SessionLocal, engine
+from app.database import SessionLocal, sync_engine
 from app.models import Base, User, Task, ShopItem
-from app.auth import get_password_hash
+from app.auth import AuthService
 import json
 
 
@@ -12,7 +12,7 @@ def create_sample_data():
     """Создать тестовые данные"""
 
     # Создаем таблицы
-    Base.metadata.create_all(bind=engine)
+    Base.metadata.create_all(bind=sync_engine)
 
     db = SessionLocal()
 
@@ -31,7 +31,7 @@ def create_sample_data():
             User(
                 username="teacher",
                 email="teacher@example.com",
-                password_hash=get_password_hash("teacher123"),
+                password_hash=AuthService("teacher123"),
                 full_name="Учитель Иванов",
                 coins=1000,
                 level=10,
@@ -40,7 +40,7 @@ def create_sample_data():
             User(
                 username="student1",
                 email="student1@example.com",
-                password_hash=get_password_hash("student123"),
+                password_hash=AuthService("student123"),
                 full_name="Петров Петр",
                 coins=250,
                 level=3,
@@ -51,7 +51,7 @@ def create_sample_data():
             User(
                 username="student2",
                 email="student2@example.com",
-                password_hash=get_password_hash("student123"),
+                password_hash=AuthService("student123"),
                 full_name="Сидорова Мария",
                 coins=180,
                 level=2,

@@ -440,4 +440,4 @@ class AdminDashboard(BaseModel):
 class BroadcastMessage(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     message: str
-    target: str = Field("all", regex="^(all|students|teachers)$")
+    target: str = Field("all", pattern="^(all|students|teachers)$")

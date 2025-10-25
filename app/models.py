@@ -96,7 +96,12 @@ class User(Base):
     deleted_at = Column(DateTime)  # Soft delete
 
     # Связи
-    submissions = relationship("Submission", back_populates="user", lazy="dynamic")
+    submissions = relationship(
+        "Submission",
+        back_populates="user",
+        foreign_keys="Submission.user_id",  # ДОБАВЛЕНО!
+        lazy="dynamic"
+    )
     purchases = relationship("Purchase", back_populates="user", lazy="dynamic")
     achievements = relationship("UserAchievement", back_populates="user", lazy="dynamic")
     created_tasks = relationship("Task", back_populates="creator", foreign_keys="Task.created_by")
@@ -240,9 +245,17 @@ class Submission(Base):
     reviewed_at = Column(DateTime)
 
     # Связи
-    user = relationship("User", back_populates="submissions", foreign_keys=[user_id])
+    user = relationship(
+        "User",
+        back_populates="submissions",
+        foreign_keys=[user_id]
+    )
     task = relationship("Task", back_populates="submissions")
-    reviewer = relationship("User", foreign_keys=[reviewed_by])
+    reviewer = relationship(
+        "User",
+        foreign_keys=[reviewed_by],
+        overlaps="submissions"  # ДОБАВЛЕНО!
+    )
 
     # Индексы
     __table_args__ = (
@@ -422,7 +435,7 @@ class Transaction(Base):
 
     # Метаданные
     created_at = Column(DateTime, default=func.now(), index=True)
-    metadata = Column(JSON)  # Дополнительная информация
+    extra_data = Column(JSON)  # Дополнительная информация
 
     # Связи
     user = relationship("User", back_populates="transactions")
