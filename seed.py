@@ -3,7 +3,7 @@
 Запуск: python seed.py
 """
 from app.database import SessionLocal, sync_engine
-from app.models import Base, User, Task, ShopItem
+from app.models import Base, User, Task, ShopItem, UserRole
 from app.auth import AuthService
 import json
 
@@ -31,33 +31,42 @@ def create_sample_data():
             User(
                 username="teacher",
                 email="teacher@example.com",
-                password_hash=AuthService("teacher123"),
+                password_hash=AuthService.get_password_hash("teacher123"),  # ✅ ИСПРАВЛЕНО
                 full_name="Учитель Иванов",
+                role=UserRole.TEACHER,
                 coins=1000,
                 level=10,
-                experience=10000
+                experience=10000,
+                is_active=True,
+                is_verified=True
             ),
             User(
                 username="student1",
                 email="student1@example.com",
-                password_hash=AuthService("student123"),
+                password_hash=AuthService.get_password_hash("student123"),  # ✅ ИСПРАВЛЕНО
                 full_name="Петров Петр",
+                role=UserRole.STUDENT,
                 coins=250,
                 level=3,
                 experience=700,
                 tasks_completed=15,
-                average_score=78.5
+                average_score=78.5,
+                is_active=True,
+                is_verified=True
             ),
             User(
                 username="student2",
                 email="student2@example.com",
-                password_hash=AuthService("student123"),
+                password_hash=AuthService.get_password_hash("student123"),  # ✅ ИСПРАВЛЕНО
                 full_name="Сидорова Мария",
+                role=UserRole.STUDENT,
                 coins=180,
                 level=2,
                 experience=350,
                 tasks_completed=8,
-                average_score=85.0
+                average_score=85.0,
+                is_active=True,
+                is_verified=True
             )
         ]
 
@@ -79,10 +88,7 @@ def create_sample_data():
                 difficulty=2,
                 reward_coins=20,
                 reward_exp=100,
-                checking_criteria=json.dumps({
-                    "keywords": ["x1", "x2", "дискриминант", "корни"],
-                    "min_length": 50
-                }, ensure_ascii=False),
+                checking_criteria={"keywords": ["x1", "x2", "дискриминант", "корни"], "min_length": 50},
                 example_solution="D = b² - 4ac = 25 - 24 = 1\nx1 = (5+1)/2 = 3\nx2 = (5-1)/2 = 2",
                 created_by=1
             ),
@@ -94,10 +100,7 @@ def create_sample_data():
                 difficulty=3,
                 reward_coins=30,
                 reward_exp=150,
-                checking_criteria=json.dumps({
-                    "keywords": ["скорость", "время", "расстояние", "встреча"],
-                    "min_length": 80
-                }, ensure_ascii=False),
+                checking_criteria={"keywords": ["скорость", "время", "расстояние", "встреча"], "min_length": 80},
                 created_by=1
             ),
             Task(
@@ -108,10 +111,7 @@ def create_sample_data():
                 difficulty=2,
                 reward_coins=25,
                 reward_exp=120,
-                checking_criteria=json.dumps({
-                    "keywords": ["книга", "автор", "герой", "сюжет"],
-                    "min_length": 150
-                }, ensure_ascii=False),
+                checking_criteria={"keywords": ["книга", "автор", "герой", "сюжет"], "min_length": 150},
                 created_by=1
             ),
             Task(
@@ -122,10 +122,7 @@ def create_sample_data():
                 difficulty=2,
                 reward_coins=20,
                 reward_exp=100,
-                checking_criteria=json.dumps({
-                    "keywords": ["Ом", "ток", "напряжение", "сопротивление", "I=U/R"],
-                    "min_length": 40
-                }, ensure_ascii=False),
+                checking_criteria={"keywords": ["Ом", "ток", "напряжение", "сопротивление", "I=U/R"], "min_length": 40},
                 example_solution="I = U/R = 12/4 = 3 А",
                 created_by=1
             ),
@@ -137,10 +134,7 @@ def create_sample_data():
                 difficulty=1,
                 reward_coins=10,
                 reward_exp=50,
-                checking_criteria=json.dumps({
-                    "keywords": ["7", "×", "="],
-                    "min_length": 100
-                }, ensure_ascii=False),
+                checking_criteria={"keywords": ["7", "×", "="], "min_length": 100},
                 created_by=1
             ),
             Task(
@@ -151,10 +145,7 @@ def create_sample_data():
                 difficulty=1,
                 reward_coins=15,
                 reward_exp=75,
-                checking_criteria=json.dumps({
-                    "keywords": ["H", "He", "Li", "водород", "гелий"],
-                    "min_length": 50
-                }, ensure_ascii=False),
+                checking_criteria={"keywords": ["H", "He", "Li", "водород", "гелий"], "min_length": 50},
                 created_by=1
             )
         ]
@@ -173,89 +164,89 @@ def create_sample_data():
             ShopItem(
                 name="Золотая звезда",
                 description="Эксклюзивная золотая звезда для вашего профиля",
-                price=100,
+                price_coins=100,
                 item_type="avatar",
-                item_data=json.dumps({"icon": "⭐"}),
-                available=True
+                item_data={"icon": "⭐"},
+                is_available=True
             ),
             ShopItem(
                 name="Ракета",
                 description="Аватар ракеты для амбициозных учеников",
-                price=150,
+                price_coins=150,
                 item_type="avatar",
-                item_data=json.dumps({"icon": "🚀"}),
-                available=True
+                item_data={"icon": "🚀"},
+                is_available=True
             ),
             ShopItem(
                 name="Корона",
                 description="Корона для лидеров рейтинга",
-                price=300,
+                price_coins=300,
                 item_type="avatar",
-                item_data=json.dumps({"icon": "👑"}),
-                available=True
+                item_data={"icon": "👑"},
+                is_available=True
             ),
 
             # Бейджи
             ShopItem(
                 name="Бейдж 'Отличник'",
                 description="Значок за отличную учебу",
-                price=50,
+                price_coins=50,
                 item_type="badge",
-                item_data=json.dumps({"badge_id": "excellent_student"}),
-                available=True
+                item_data={"badge_id": "excellent_student"},
+                is_available=True
             ),
             ShopItem(
                 name="Бейдж 'Математик'",
                 description="За решение 100 математических задач",
-                price=200,
+                price_coins=200,
                 item_type="badge",
-                item_data=json.dumps({"badge_id": "math_master"}),
-                available=True
+                item_data={"badge_id": "math_master"},
+                is_available=True
             ),
             ShopItem(
                 name="Бейдж 'Писатель'",
                 description="За написание 50 сочинений",
-                price=200,
+                price_coins=200,
                 item_type="badge",
-                item_data=json.dumps({"badge_id": "writer"}),
-                available=True
+                item_data={"badge_id": "writer"},
+                is_available=True
             ),
 
             # Темы оформления
             ShopItem(
                 name="Темная тема",
                 description="Классическая темная тема для интерфейса",
-                price=80,
+                price_coins=80,
                 item_type="theme",
-                item_data=json.dumps({"theme_id": "dark"}),
-                available=True
+                item_data={"theme_id": "dark"},
+                is_available=True
             ),
             ShopItem(
                 name="Космическая тема",
                 description="Красивая тема с космосом",
-                price=120,
+                price_coins=120,
                 item_type="theme",
-                item_data=json.dumps({"theme_id": "space"}),
-                available=True
+                item_data={"theme_id": "space"},
+                is_available=True
             ),
 
             # Power-ups
             ShopItem(
                 name="Двойные монеты",
                 description="Получайте x2 монеты за следующие 5 заданий",
-                price=100,
+                price_coins=100,
                 item_type="power_up",
-                item_data=json.dumps({"type": "double_coins", "duration": 5}),
-                available=True,
-                stock=None  # Бесконечный запас
+                item_data={"type": "double_coins", "duration": 5},
+                is_available=True,
+                stock=None
             ),
             ShopItem(
                 name="Подсказка",
                 description="Получить подсказку для любого задания",
-                price=50,
+                price_coins=50,
                 item_type="hint",
-                item_data=json.dumps({"type": "hint"}),
-                available=True,
+                item_data={"type": "hint"},
+                is_available=True,
                 stock=None
             )
         ]
@@ -272,10 +263,12 @@ def create_sample_data():
         print("   Ученик 1: student1 / student123")
         print("   Ученик 2: student2 / student123")
         print("\n🌐 Запустите сервер: uvicorn app.main:app --reload")
-        print("📚 API документация: http://localhost:8000/docs")
+        print("📚 API документация: http://localhost:8000/api/docs")
 
     except Exception as e:
         print(f"❌ Ошибка: {e}")
+        import traceback
+        traceback.print_exc()
         db.rollback()
 
     finally:
