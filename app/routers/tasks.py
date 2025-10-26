@@ -2,11 +2,12 @@
 API для работы с заданиями
 """
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import List, Optional
 
-from app.database import get_db
-from app.models import Task, User
+from app.database import get_async_db
+from app.models import Task, User, TaskStatus
 from app.schemas import TaskCreate, TaskResponse
 from app.auth import get_current_user
 
@@ -20,34 +21,45 @@ async def get_tasks(
         subject: Optional[str] = None,
         difficulty: Optional[int] = Query(None, ge=1, le=5),
         task_type: Optional[str] = None,
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_async_db)
 ):
     """
     Получить список заданий с фильтрами
     """
-    query = db.query(Task).filter(Task.is_active == True)
+    query = select(Task).where(Task.status == TaskStatus.ACTIVE)
 
     # Фильтры
     if subject:
-        query = query.filter(Task.subject == subject)
+        query = query.where(Task.subject == subject)
 
     if difficulty:
-        query = query.filter(Task.difficulty == difficulty)
+        query = query.where(Task.difficulty == difficulty)
 
     if task_type:
-        query = query.filter(Task.task_type == task_type)
+        query = query.where(Task.task_type == task_type)
 
-    tasks = query.order_by(Task.created_at.desc()).offset(skip).limit(limit).all()
+    result = await db.execute(
+        query.order_by(Task.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+    )
+    tasks = result.scalars().all()
 
     return tasks
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
-async def get_task(task_id: int, db: Session = Depends(get_db)):
+async def get_task(
+        task_id: int,
+        db: AsyncSession = Depends(get_async_db)
+):
     """
     Получить конкретное задание
     """
-    task = db.query(Task).filter(Task.id == task_id).first()
+    result = await db.execute(
+        select(Task).where(Task.id == task_id)
+    )
+    task = result.scalar_one_or_none()
 
     if not task:
         raise HTTPException(status_code=404, detail="Задание не найдено")
@@ -59,11 +71,10 @@ async def get_task(task_id: int, db: Session = Depends(get_db)):
 async def create_task(
         task_data: TaskCreate,
         current_user: User = Depends(get_current_user),
-        db: Session = Depends(get_db)
+        db: AsyncSession = Depends(get_async_db)
 ):
     """
     Создать новое задание (для учителей/администраторов)
-    В продакшене добавить проверку роли
     """
     new_task = Task(
         title=task_data.title,
@@ -79,32 +90,40 @@ async def create_task(
     )
 
     db.add(new_task)
-    db.commit()
-    db.refresh(new_task)
+    await db.commit()
+    await db.refresh(new_task)
 
     return new_task
 
 
 @router.get("/subjects/list")
-async def get_subjects(db: Session = Depends(get_db)):
+async def get_subjects(db: AsyncSession = Depends(get_async_db)):
     """
     Получить список доступных предметов
     """
-    subjects = db.query(Task.subject).filter(
-        Task.subject.isnot(None),
-        Task.is_active == True
-    ).distinct().all()
+    result = await db.execute(
+        select(Task.subject)
+        .where(
+            Task.subject.isnot(None),
+            Task.status == TaskStatus.ACTIVE
+        )
+        .distinct()
+    )
+    subjects = [row[0] for row in result.all() if row[0]]
 
-    return [s[0] for s in subjects if s[0]]
+    return subjects
 
 
 @router.get("/types/list")
-async def get_task_types(db: Session = Depends(get_db)):
+async def get_task_types(db: AsyncSession = Depends(get_async_db)):
     """
     Получить список типов заданий
     """
-    types = db.query(Task.task_type).filter(
-        Task.is_active == True
-    ).distinct().all()
+    result = await db.execute(
+        select(Task.task_type)
+        .where(Task.status == TaskStatus.ACTIVE)
+        .distinct()
+    )
+    types = [row[0] for row in result.all()]
 
-    return [t[0] for t in types]
+    return types
