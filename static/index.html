@@ -649,10 +649,21 @@
                             await this.loadUserData();
                             this.showNotification('Вход выполнен успешно!', 'success');
                         } else {
-                            this.authError = data.detail || 'Ошибка входа';
+                            // Более детальная обработка ошибок
+                            if (response.status === 500) {
+                                this.authError = 'Ошибка сервера. Возможно, база данных не настроена. Запустите: python reset_db.py';
+                            } else if (response.status === 401) {
+                                this.authError = 'Неправильный логин или пароль';
+                            } else if (response.status === 423) {
+                                this.authError = 'Аккаунт заблокирован';
+                            } else {
+                                this.authError = data.detail || `Ошибка входа (${response.status})`;
+                            }
+                            console.error('Login error:', { status: response.status, data });
                         }
                     } catch (error) {
-                        this.authError = 'Ошибка соединения с сервером';
+                        console.error('Network error:', error);
+                        this.authError = `Ошибка соединения с сервером. Проверьте, что сервер запущен на ${this.apiUrl}`;
                     }
                 },
 
