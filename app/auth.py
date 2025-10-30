@@ -300,7 +300,7 @@ class RateLimiter:
         self.window_seconds = window_seconds
 
     async def __call__(self, request: Request) -> None:
-        client_id = request.client.host
+        client_id = request.client.host if request.client else "unknown"
         key = f"rate_limit:{client_id}"
 
         # Используем Redis для подсчета запросов
