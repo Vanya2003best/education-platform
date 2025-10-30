@@ -75,7 +75,7 @@ async def register(
     return new_user
 
 
-@router.post("/login", response_model=Token, dependencies=[Depends(auth_rate_limiter)])
+@router.post("/login", response_model=Token)
 async def login(
     form_data: OAuth2PasswordRequestForm = Depends(),
     db: AsyncSession = Depends(get_async_db)
