@@ -1,39 +1,44 @@
+#!/usr/bin/env python3
 """
-Быстрое исправление проблемы с логином
-Запуск: python quick_fix.py
+🚀 QUICK FIX for Login Internal Server Error
+Run this to immediately fix the authentication issue
 """
-import sys
-from app.database import SessionLocal, sync_engine
-from app.models import Base, User, UserRole
-from app.auth import AuthService
 
+import os
+import sys
+
+# Add current directory to path
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 def quick_fix():
-    """Быстро исправить проблему с логином"""
-
-    print("🔧 Education Platform - Быстрое исправление")
+    print("🔧 QUICK FIX FOR LOGIN ERROR")
     print("=" * 60)
 
-    db = SessionLocal()
-
     try:
-        # Проверяем существующих пользователей
-        print("\n📋 Проверка пользователей...")
-        users = db.query(User).all()
+        # Import required modules
+        from app.database import SessionLocal, sync_engine
+        from app.models import Base, User, UserRole
+        from app.auth import AuthService
 
-        if not users:
-            print("❌ Пользователи не найдены!")
-            print("   Создаем тестового пользователя...")
+        # Create tables if not exist
+        print("\n1. Creating database tables...")
+        Base.metadata.create_all(bind=sync_engine)
+        print("   ✅ Tables ready")
 
-            # Создаем таблицы если их нет
-            Base.metadata.create_all(bind=sync_engine)
+        # Create or fix users
+        print("\n2. Setting up users...")
+        db = SessionLocal()
 
-            # Создаем тестового пользователя
-            test_user = User(
-                username="ivan",
-                email="ivan@example.com",
-                password_hash=AuthService.get_password_hash("ivan123"),
-                full_name="Иван Иванов",
+        # Check if student1 exists
+        user = db.query(User).filter(User.username == "student1").first()
+
+        if not user:
+            # Create student1
+            user = User(
+                username="student1",
+                email="student1@example.com",
+                password_hash=AuthService.get_password_hash("student123"),
+                full_name="Test Student",
                 role=UserRole.STUDENT,
                 coins=100,
                 level=1,
@@ -41,88 +46,53 @@ def quick_fix():
                 is_active=True,
                 is_verified=True
             )
-
-            db.add(test_user)
-            db.commit()
-
-            print("✅ Создан пользователь: ivan / ivan123")
+            db.add(user)
+            print("   ✅ Created user: student1")
         else:
-            print(f"✅ Найдено пользователей: {len(users)}")
+            # Fix password
+            user.password_hash = AuthService.get_password_hash("student123")
+            user.is_active = True
+            user.is_verified = True
+            print("   ✅ Fixed user: student1")
 
-            # Проверяем пароли
-            print("\n🔐 Проверка паролей...")
+        # Also create admin
+        admin = db.query(User).filter(User.username == "admin").first()
+        if not admin:
+            admin = User(
+                username="admin",
+                email="admin@example.com",
+                password_hash=AuthService.get_password_hash("admin123"),
+                full_name="Administrator",
+                role=UserRole.ADMIN,
+                coins=1000,
+                level=10,
+                is_active=True,
+                is_verified=True
+            )
+            db.add(admin)
+            print("   ✅ Created user: admin")
 
-            fixed_count = 0
-            for user in users:
-                # Пытаемся определить правильный пароль
-                test_passwords = {
-                    "admin": "admin123",
-                    "teacher": "teacher123",
-                    "student1": "student123",
-                    "student2": "student123",
-                    "ivan": "ivan123"
-                }
-
-                expected_password = test_passwords.get(user.username, "password123")
-
-                # Проверяем, работает ли пароль
-                try:
-                    is_valid = AuthService.verify_password(expected_password, user.password_hash)
-
-                    if is_valid:
-                        print(f"   ✅ {user.username} - пароль OK")
-                    else:
-                        print(f"   ❌ {user.username} - пароль НЕВЕРНЫЙ, исправляем...")
-
-                        # Исправляем хеш пароля
-                        user.password_hash = AuthService.get_password_hash(expected_password)
-                        fixed_count += 1
-
-                        print(f"   ✅ {user.username} - пароль исправлен на '{expected_password}'")
-
-                except Exception as e:
-                    print(f"   ⚠️  {user.username} - ошибка проверки: {e}")
-                    # На всякий случай обновляем хеш
-                    user.password_hash = AuthService.get_password_hash(expected_password)
-                    fixed_count += 1
-                    print(f"   ✅ {user.username} - пароль пересоздан")
-
-            if fixed_count > 0:
-                db.commit()
-                print(f"\n✅ Исправлено паролей: {fixed_count}")
-            else:
-                print("\n✅ Все пароли корректны!")
+        db.commit()
+        db.close()
 
         print("\n" + "=" * 60)
-        print("✅ ИСПРАВЛЕНИЕ ЗАВЕРШЕНО!\n")
-
-        print("📋 Доступные учетные данные:")
-        users = db.query(User).all()
-        for user in users:
-            test_passwords = {
-                "admin": "admin123",
-                "teacher": "teacher123",
-                "student1": "student123",
-                "student2": "student123",
-                "ivan": "ivan123"
-            }
-            password = test_passwords.get(user.username, "password123")
-            print(f"   • {user.username:15} / {password}")
-
-        print("\n🚀 Теперь запустите сервер:")
-        print("   python -m uvicorn app.main:app --reload")
-        print("\n🌐 И откройте: http://127.0.0.1:8000\n")
+        print("✅ FIX COMPLETE!")
+        print("=" * 60)
+        print("\n📋 Login credentials:")
+        print("   • student1 / student123")
+        print("   • admin / admin123")
+        print("\n🚀 Now restart your server:")
+        print("   uvicorn app.main:app --reload")
+        print("\n🌐 Then go to: http://localhost:8000")
 
         return True
 
     except Exception as e:
-        print(f"\n❌ ОШИБКА: {e}")
-        import traceback
-        traceback.print_exc()
+        print(f"\n❌ ERROR: {e}")
+        print("\n💡 Try running:")
+        print("   1. pip install -r requirements.txt")
+        print("   2. python reset_db.py")
         return False
-
-    finally:
-        db.close()
 
 
 if __name__ == "__main__":
