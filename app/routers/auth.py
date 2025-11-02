@@ -63,9 +63,15 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(),
         if not user:
             raise HTTPException(status_code=401, detail="Неправильное имя пользователя или пароль",
                                 headers={"WWW-Authenticate": "Bearer"})
-        return AuthService.create_tokens(user.id, user.role.value)
+        return AuthService.create_tokens(user.id, user.role)
     except HTTPException:
         raise
     except Exception:
         log.exception("login failed")
         raise HTTPException(500, "Login failed")
+
+
+@router.get("/me", response_model=UserResponse)
+async def get_me(current_user: User = Depends(get_current_user)):
+    """Возвращает текущего авторизованного пользователя."""
+    return current_user

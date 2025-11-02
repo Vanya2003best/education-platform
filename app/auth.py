@@ -6,7 +6,6 @@ from typing import Optional, Dict, Any
 from fastapi import Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
-from passlib.context import CryptContext
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import pyotp
@@ -15,18 +14,24 @@ import io
 import base64
 import secrets
 import re
+import logging
 
 from app.config import settings
 from app.database import get_async_db
 from app.models import User, UserRole
 from app.utils.cache import cache_manager
 
-# Настройка хеширования паролей
-pwd_context = CryptContext(
-    schemes=["bcrypt"],
-    deprecated="auto",
-    bcrypt__rounds=12
-)
+import bcrypt
+from passlib.hash import pbkdf2_sha256
+
+logger = logging.getLogger(__name__)
+
+
+def _get_bcrypt_rounds() -> int:
+    """Безопасно получить количество раундов для bcrypt."""
+    rounds = getattr(settings, "BCRYPT_ROUNDS", 12)
+    # Значение должно находиться в допустимом диапазоне bcrypt (4-31)
+    return max(4, min(int(rounds), 31))
 
 # OAuth2 схемы
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
@@ -40,18 +45,40 @@ class AuthService:
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Проверка пароля"""
         try:
-            return pwd_context.verify(plain_password, hashed_password)
-        except Exception as e:
-            # лог и отказ без 500
+            if not hashed_password:
+                return False
+
+            hashed_password = hashed_password.strip()
+            normalized = hashed_password.lstrip("$")
+
+            if normalized.startswith("pbkdf2_sha256$") or normalized.startswith("pbkdf2-sha256$"):
+                return pbkdf2_sha256.verify(plain_password, hashed_password)
+
+            return bcrypt.checkpw(
+                plain_password.encode("utf-8"),
+                hashed_password.encode("utf-8")
+            )
+        except ValueError as exc:
+            # Некорректный хеш (например, поврежден или устаревший формат)
+            logger.warning("Password verify failed: %s", exc)
+            return False
+        except Exception:
+            logger.exception("Password verify backend error")
             raise HTTPException(status_code=500, detail="Password verify backend error")
 
     @staticmethod
     def get_password_hash(password: str) -> str:
         """Хеширование пароля"""
         try:
-            return pwd_context.hash(password)
-        except Exception as e:
-            # лог и нормальная ошибка вместо 500
+            rounds = _get_bcrypt_rounds()
+            salt = bcrypt.gensalt(rounds=rounds)
+            hashed = bcrypt.hashpw(password.encode("utf-8"), salt)
+            return hashed.decode("utf-8")
+        except ValueError as exc:
+            logger.warning("Password hashing failed: %s", exc)
+            raise HTTPException(status_code=400, detail=str(exc))
+        except Exception:
+            logger.exception("Password hash backend error")
             raise HTTPException(status_code=500, detail="Password hash backend error")
 
     @staticmethod
@@ -97,9 +124,10 @@ class AuthService:
         return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
     @staticmethod
-    def create_tokens(user_id: int, role: str) -> Dict[str, str]:
+    def create_tokens(user_id: int, role: UserRole | str) -> Dict[str, str]:
         """Создание пары access и refresh токенов"""
-        data = {"sub": str(user_id), "role": role}
+        role_value = role.value if isinstance(role, UserRole) else str(role)
+        data = {"sub": str(user_id), "role": role_value}
 
         return {
             "access_token": AuthService.create_token(data, "access"),

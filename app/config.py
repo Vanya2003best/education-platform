@@ -28,6 +28,7 @@ class Settings(BaseSettings):
     PASSWORD_MIN_LENGTH: int = 8
     PASSWORD_REQUIRE_UPPERCASE: bool = True
     PASSWORD_REQUIRE_NUMBER: bool = True
+    BCRYPT_ROUNDS: int = 12
 
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
@@ -125,6 +126,4 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Получить настройки (кэшированные)"""
     return Settings()
-
-
 settings = get_settings()
