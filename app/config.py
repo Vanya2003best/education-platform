@@ -29,7 +29,7 @@ class Settings(BaseSettings):
     PASSWORD_REQUIRE_UPPERCASE: bool = True
     PASSWORD_REQUIRE_NUMBER: bool = True
     BCRYPT_ROUNDS: int = 12
-
+    PBKDF2_ROUNDS: int = 600_000
     # Rate Limiting
     RATE_LIMIT_REQUESTS: int = 100
     RATE_LIMIT_PERIOD: int = 60  # секунды

@@ -118,7 +118,7 @@ def fix_issues(issues):
 
     # Fix missing users
     if "no_users" in issues or "user_check_error" in issues:
-        print("\n🔧 Creating test users...")
+        print("\n🔧 Creating tests users...")
         try:
             from app.database import SessionLocal
             from app.models import User, UserRole
@@ -130,7 +130,7 @@ def fix_issues(issues):
             existing = db.query(User).filter(User.username == "student1").first()
 
             if not existing:
-                # Create test users
+                # Create tests users
                 users = [
                     User(
                         username="admin",
@@ -171,7 +171,7 @@ def fix_issues(issues):
                     db.add(user)
 
                 db.commit()
-                print("   ✅ Created test users:")
+                print("   ✅ Created tests users:")
                 print("      • admin / admin123")
                 print("      • student1 / student123")
                 print("      • teacher / teacher123")
@@ -221,7 +221,7 @@ def test_login():
                 if user:
                     is_valid = AuthService.verify_password("student123", user.password_hash)
                     if is_valid:
-                        print("   ✅ Login test PASSED for student1/student123")
+                        print("   ✅ Login tests PASSED for student1/student123")
 
                         # Test token creation
                         tokens = AuthService.create_tokens(user.id, user.role.value)
@@ -237,7 +237,7 @@ def test_login():
         asyncio.run(test())
 
     except Exception as e:
-        print(f"   ❌ Login test failed: {e}")
+        print(f"   ❌ Login tests failed: {e}")
         traceback.print_exc()
 
 
@@ -305,7 +305,7 @@ def main():
     print("   Username: student1")
     print("   Password: student123")
     print("\n3. If still not working, check server logs for detailed error")
-    print("\n4. Alternative: Use the test endpoint:")
+    print("\n4. Alternative: Use the tests endpoint:")
     print("   http://localhost:8000/static/test.html")
     print("\n✨ Good luck!")
 

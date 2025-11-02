@@ -2,10 +2,10 @@
 Кэширование с Redis для улучшения производительности
 """
 import json
-import pickle
-from typing import Optional, Any, Union
-from datetime import timedelta
+from contextlib import suppress
+from typing import Optional, Any, Callable
 import redis.asyncio as redis
+from redis.exceptions import ConnectionError as RedisConnectionError
 from functools import wraps
 import hashlib
 import logging
@@ -21,35 +21,57 @@ class CacheManager:
     def __init__(self):
         self.redis_client: Optional[redis.Redis] = None
         self._connected = False
+        self._disabled = False
+        self._build_client: Callable[[], redis.Redis] = self._default_build_client
+
+    def _default_build_client(self) -> redis.Redis:
+        """Создать экземпляр клиента Redis."""
+        return redis.from_url(
+            settings.REDIS_URL,
+            encoding="utf-8",
+            decode_responses=True
+        )
+
+    async def _disable(self) -> None:
+        """Отключить кэширование после ошибки."""
+        if self.redis_client:
+            with suppress(Exception):
+                await self.redis_client.close()
+        self.redis_client = None
+        self._connected = False
+        self._disabled = True
 
     async def connect(self):
         """Подключение к Redis"""
+        if self._disabled:
+            return
         if not settings.REDIS_URL:
-            logger.warning("Redis URL not configured, caching disabled")
+            logger.info("Redis URL not configured, caching disabled")
+            self._disabled = True
             return
 
         try:
-            self.redis_client = redis.from_url(
-                settings.REDIS_URL,
-                encoding="utf-8",
-                decode_responses=True
-            )
+            self.redis_client = self._build_client()
             await self.redis_client.ping()
             self._connected = True
             logger.info("Connected to Redis successfully")
-        except Exception as e:
-            logger.error(f"Failed to connect to Redis: {e}")
-            self._connected = False
+        except RedisConnectionError as exc:
+            logger.warning(
+                "Redis unavailable (%s), caching disabled", exc
+            )
+            await self._disable()
+        except Exception as exc:  # pragma: no cover - unexpected failure
+            logger.exception("Unexpected Redis connection error")
+            await self._disable()
 
     async def disconnect(self):
         """Отключение от Redis"""
-        if self.redis_client:
-            await self.redis_client.close()
-            self._connected = False
+        await self._disable()
+        self._disabled = False
 
     def is_connected(self) -> bool:
         """Проверка подключения"""
-        return self._connected
+        return self._connected and not self._disabled
 
     async def get(self, key: str) -> Optional[Any]:
         """Получить значение из кэша"""

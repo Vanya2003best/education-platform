@@ -175,11 +175,11 @@ try:
     if user:
         is_valid = AuthService.verify_password("student123", user.password_hash)
         if is_valid:
-            print("   ✅ Login test PASSED")
+            print("   ✅ Login tests PASSED")
         else:
-            print("   ❌ Login test FAILED - password incorrect")
+            print("   ❌ Login tests FAILED - password incorrect")
     else:
-        print("   ❌ Login test FAILED - user not found")
+        print("   ❌ Login tests FAILED - user not found")
 finally:
     db.close()
 """
@@ -215,7 +215,7 @@ finally:
 
     print("\n💡 If you still have issues:")
     print("   1. Check the server console for error messages")
-    print("   2. Try the test server: python test_server.py")
+    print("   2. Try the tests server: python test_server.py")
     print("   3. Check browser DevTools (F12) for detailed errors")
 
     print("\n✨ Good luck with your Education Platform!")

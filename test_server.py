@@ -125,7 +125,7 @@ async def test_authentication_flow():
                 traceback.print_exc()
 
     except Exception as e:
-        print(f"   ❌ Login test error: {e}")
+        print(f"   ❌ Login tests error: {e}")
         traceback.print_exc()
 
     # 5. Test the actual login function
@@ -157,7 +157,7 @@ async def test_authentication_flow():
     except ImportError as e:
         print(f"   ⚠️ Could not import login function: {e}")
     except Exception as e:
-        print(f"   ❌ Login function test error: {e}")
+        print(f"   ❌ Login function tests error: {e}")
         traceback.print_exc()
 
 
@@ -200,7 +200,7 @@ def suggest_fixes():
 3. If database connection failed:
    python reset_db.py
 
-4. To test with minimal server:
+4. To tests with minimal server:
    python test_server_fixed.py
    (then visit http://localhost:8001/test)
 
