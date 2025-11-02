@@ -112,6 +112,23 @@ app.add_middleware(
 # Сжатие ответов
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
+
+if getattr(settings, "RATE_LIMIT_REQUESTS", 0):
+    app.add_middleware(RateLimitMiddleware, max_requests=settings.RATE_LIMIT_REQUESTS)
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import traceback, logging
+
+logger = logging.getLogger(__name__)
+
+@app.exception_handler(Exception)
+async def unhandled_exc_handler(request: Request, exc: Exception):
+    tb = "".join(traceback.format_exception(type(exc), exc, exc.__traceback__))
+    logger.error("UNHANDLED %s %s -> %s\n%s", request.method, request.url.path, repr(exc), tb)
+    # Возвращаем JSON вместо голого текста:
+    return JSONResponse(status_code=500, content={"detail": "Internal Server Error", "error": repr(exc)})
+
 # Безопасность - проверка хоста
 if settings.is_production:
     app.add_middleware(

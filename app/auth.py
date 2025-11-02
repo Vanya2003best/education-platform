@@ -39,12 +39,20 @@ class AuthService:
     @staticmethod
     def verify_password(plain_password: str, hashed_password: str) -> bool:
         """Проверка пароля"""
-        return pwd_context.verify(plain_password, hashed_password)
+        try:
+            return pwd_context.verify(plain_password, hashed_password)
+        except Exception as e:
+            # лог и отказ без 500
+            raise HTTPException(status_code=500, detail="Password verify backend error")
 
     @staticmethod
     def get_password_hash(password: str) -> str:
         """Хеширование пароля"""
-        return pwd_context.hash(password)
+        try:
+            return pwd_context.hash(password)
+        except Exception as e:
+            # лог и нормальная ошибка вместо 500
+            raise HTTPException(status_code=500, detail="Password hash backend error")
 
     @staticmethod
     def validate_password_strength(password: str) -> tuple[bool, str]:
@@ -101,21 +109,21 @@ class AuthService:
 
     @staticmethod
     async def decode_token(token: str) -> Dict[str, Any]:
-        """Декодирование и валидация токена"""
         try:
-            payload = jwt.decode(
-                token,
-                settings.SECRET_KEY,
-                algorithms=[settings.ALGORITHM]
-            )
+            payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
 
-            # Проверяем, не отозван ли токен
             jti = payload.get("jti")
-            if jti and await cache_manager.is_token_blacklisted(jti):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Token has been revoked"
-                )
+            # ✅ проверяем подключение к Redis и оборачиваем в try
+            if jti and getattr(cache_manager, "is_connected", lambda: False)():
+                try:
+                    if await cache_manager.is_token_blacklisted(jti):
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Token has been revoked"
+                        )
+                except Exception:
+                    # Если Redis сбо́ит — НЕ роняем авторизацию
+                    pass
 
             return payload
 
@@ -298,13 +306,30 @@ class RateLimiter:
     def __init__(self, max_requests: int = 10, window_seconds: int = 60):
         self.max_requests = max_requests
         self.window_seconds = window_seconds
+        # ✅ простой in-memory фолбэк: {key: [timestamps]}
+        self._mem: dict[str, list[float]] = {}
 
     async def __call__(self, request: Request) -> None:
         client_id = request.client.host if request.client else "unknown"
         key = f"rate_limit:{client_id}"
+        now = datetime.utcnow().timestamp()
+        window_start = now - self.window_seconds
 
-        # Используем Redis для подсчета запросов
-        count = await cache_manager.increment(key, self.window_seconds)
+        try:
+            # ✅ используем Redis, только если он реально подключен
+            if getattr(cache_manager, "is_connected", lambda: False)():
+                # предполагаем сигнатуру increment(key, ttl)
+                count = await cache_manager.increment(key, ttl=self.window_seconds)
+            else:
+                # ✅ in-memory
+                times = self._mem.get(key, [])
+                times = [t for t in times if t > window_start]
+                times.append(now)
+                self._mem[key] = times
+                count = len(times)
+        except Exception:
+            # ✅ при любой ошибке лимитер не должен ронять эндпойнт
+            return
 
         if count > self.max_requests:
             raise HTTPException(

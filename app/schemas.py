@@ -1,7 +1,7 @@
 """
 Pydantic схемы для валидации данных API
 """
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, validator, ConfigDict
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -73,25 +73,21 @@ class UserUpdate(BaseModel):
     theme: Optional[str] = None
 
 
-class UserResponse(UserBase):
+class UserResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)  # ВАЖНО
+
     id: int
-    role: UserRoleEnum
-    avatar_url: Optional[str]
+    username: str
+    email: str
+    full_name: str | None = None
+    role: str | None = None
     coins: int
-    gems: int
     level: int
     experience: int
-    streak_days: int
-    tasks_completed: int
-    average_score: float
-    is_active: bool
-    is_verified: bool
-    is_premium: bool
-    created_at: datetime
-    last_login: Optional[datetime]
-
-    class Config:
-        from_attributes = True
+    is_active: bool = True
+    is_verified: bool = False
+    last_login: datetime | None = None
+    last_activity: datetime | None = None
 
 
 class UserStats(BaseModel):
@@ -106,7 +102,6 @@ class UserStats(BaseModel):
     best_score: float
     total_time_spent: int
     rank_position: int
-
 
 class UserLogin(BaseModel):
     username: str

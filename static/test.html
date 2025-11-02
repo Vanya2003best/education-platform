@@ -140,7 +140,7 @@
                     body: JSON.stringify({ username, email, password })
                 });
 
-                const data = await response.json();
+                const data = await parseJsonSafe(response);
                 showResult('register-result', {
                     status: response.status,
                     statusText: response.statusText,
@@ -165,7 +165,7 @@
                     body: formData
                 });
 
-                const data = await response.json();
+                const data = await parseJsonSafe(response);
 
                 if (response.ok) {
                     token = data.access_token;
@@ -208,6 +208,13 @@
             } catch (error) {
                 showResult('shop-result', { error: error.message }, true);
             }
+        }
+
+        async function parseJsonSafe(response) {
+          const ct = response.headers.get('content-type') || '';
+          if (ct.includes('application/json')) return await response.json();
+          const text = await response.text();
+          try { return JSON.parse(text); } catch { return { detail: text.trim() }; }
         }
 
         async function testGetProfile() {

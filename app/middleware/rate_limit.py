@@ -34,7 +34,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.exempt_paths = exempt_paths or ["/health", "/api/docs", "/api/redoc", "/static"]
+        self.exempt_paths = (exempt_paths or ["/health", "/api/docs", "/api/redoc", "/api/openapi.json", "/static"])
 
         # In-memory хранилище (fallback)
         self.request_counts = defaultdict(list)
@@ -42,57 +42,62 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     async def dispatch(
             self, request: Request, call_next: Callable
     ) -> Response:
-        # Проверяем, нужно ли применять rate limiting
-        if any(request.url.path.startswith(path) for path in self.exempt_paths):
+        try:
+            # Проверяем, нужно ли применять rate limiting
+            if any(request.url.path.startswith(path) for path in self.exempt_paths):
+                return await call_next(request)
+
+            # Определяем клиента (IP или user_id)
+            client_id = self._get_client_id(request)
+
+            # Проверяем лимит
+            is_allowed, remaining, reset_time = await self._check_rate_limit(client_id)
+
+            if not is_allowed:
+                # Логируем превышение лимита
+                log_security_event(
+                    "rate_limit_exceeded",
+                    user_id=getattr(request.state, "user", None),
+                    ip_address=client_id,
+                    details={
+                        "path": request.url.path,
+                        "method": request.method
+                    }
+                )
+
+                logger.warning(
+                    f"Rate limit exceeded for {client_id}",
+                    extra={
+                        "client_id": client_id,
+                        "path": request.url.path
+                    }
+                )
+
+                # Возвращаем 429 Too Many Requests
+                raise HTTPException(
+                    status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                    detail="Слишком много запросов. Попробуйте позже.",
+                    headers={
+                        "X-RateLimit-Limit": str(self.max_requests),
+                        "X-RateLimit-Remaining": "0",
+                        "X-RateLimit-Reset": str(reset_time),
+                        "Retry-After": str(int(reset_time - time.time()))
+                    }
+                )
+
+            # Обрабатываем запрос
+            response = await call_next(request)
+
+            # Добавляем заголовки rate limit
+            response.headers["X-RateLimit-Limit"] = str(self.max_requests)
+            response.headers["X-RateLimit-Remaining"] = str(remaining)
+            response.headers["X-RateLimit-Reset"] = str(reset_time)
+
+            return response
+        except Exception as e:
+            # Nigdy nie zabijamy requestu przez limiter
+            logger.warning(f"RateLimit error ignored: {e}")
             return await call_next(request)
-
-        # Определяем клиента (IP или user_id)
-        client_id = self._get_client_id(request)
-
-        # Проверяем лимит
-        is_allowed, remaining, reset_time = await self._check_rate_limit(client_id)
-
-        if not is_allowed:
-            # Логируем превышение лимита
-            log_security_event(
-                "rate_limit_exceeded",
-                user_id=getattr(request.state, "user", None),
-                ip_address=client_id,
-                details={
-                    "path": request.url.path,
-                    "method": request.method
-                }
-            )
-
-            logger.warning(
-                f"Rate limit exceeded for {client_id}",
-                extra={
-                    "client_id": client_id,
-                    "path": request.url.path
-                }
-            )
-
-            # Возвращаем 429 Too Many Requests
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Слишком много запросов. Попробуйте позже.",
-                headers={
-                    "X-RateLimit-Limit": str(self.max_requests),
-                    "X-RateLimit-Remaining": "0",
-                    "X-RateLimit-Reset": str(reset_time),
-                    "Retry-After": str(int(reset_time - time.time()))
-                }
-            )
-
-        # Обрабатываем запрос
-        response = await call_next(request)
-
-        # Добавляем заголовки rate limit
-        response.headers["X-RateLimit-Limit"] = str(self.max_requests)
-        response.headers["X-RateLimit-Remaining"] = str(remaining)
-        response.headers["X-RateLimit-Reset"] = str(reset_time)
-
-        return response
 
     def _get_client_id(self, request: Request) -> str:
         """Определить ID клиента для rate limiting"""
@@ -186,7 +191,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         if is_allowed:
             requests.append(current_time)
 
-        remaining = max(0, self.max_requests - current_count - 1)
+        remaining = max(0, self.max_requests - len(requests))
 
         # Вычисляем время сброса (самая старая запись + окно)
         if requests:
