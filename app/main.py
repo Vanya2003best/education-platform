@@ -10,6 +10,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
+from collections.abc import Mapping
+from fastapi.encoders import jsonable_encoder
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import uvicorn
@@ -184,15 +186,33 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
             }
         }
     )
-
+def _stringify_exceptions(value):
+    """Рекурсивно преобразует исключения в сериализуемые значения."""
+    if isinstance(value, BaseException):
+        message = str(value)
+        return message or value.__class__.__name__
+    if isinstance(value, Mapping):
+        return {key: _stringify_exceptions(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_stringify_exceptions(item) for item in value]
+    if isinstance(value, tuple):
+        return tuple(_stringify_exceptions(item) for item in value)
+    if isinstance(value, set):
+        sanitized = [_stringify_exceptions(item) for item in value]
+        try:
+            return sorted(sanitized, key=lambda item: repr(item))
+        except TypeError:  # pragma: no cover - гетерогенные структуры без порядка
+            return sanitized
+    return value
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Обработчик ошибок валидации"""
-    error_details = jsonable_encoder(exc.errors())
+    sanitized_errors = _stringify_exceptions(exc.errors())
+    error_details = jsonable_encoder(sanitized_errors)
     body_payload = None
     if settings.DEBUG and exc.body is not None:
-        body_payload = jsonable_encoder(exc.body)
+        body_payload = jsonable_encoder(_stringify_exceptions(exc.body))
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
