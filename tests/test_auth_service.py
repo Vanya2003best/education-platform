@@ -1,3 +1,5 @@
+import base64
+import hashlib
 import os
 import sys
 import types
@@ -64,3 +66,17 @@ def test_native_pbkdf2_fallback_when_passlib_missing(monkeypatch):
     assert hashed.startswith("$pbkdf2-sha256$native$")
     assert AuthService.verify_password("Admin123", hashed)
     assert not AuthService.verify_password("Admin123!", hashed)
+
+def _make_werkzeug_like_hash(password: str, rounds: int = 260_000) -> str:
+    salt_bytes = os.urandom(16)
+    salt_b64 = base64.b64encode(salt_bytes).decode("utf-8").rstrip("=")
+    derived = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt_bytes, rounds)
+    hash_b64 = base64.b64encode(derived).decode("utf-8").rstrip("=")
+    return f"pbkdf2:sha256:{rounds}${salt_b64}${hash_b64}"
+
+
+def test_verify_password_supports_werkzeug_style_hashes():
+    password = "WerkzeugSecret42"
+    hashed = _make_werkzeug_like_hash(password)
+    assert AuthService.verify_password(password, hashed)
+    assert not AuthService.verify_password(password + "!", hashed)

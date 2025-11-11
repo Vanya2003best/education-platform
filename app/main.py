@@ -9,6 +9,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import RedirectResponse, JSONResponse
 from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from contextlib import asynccontextmanager
 import uvicorn
@@ -188,13 +189,18 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     """Обработчик ошибок валидации"""
+    error_details = jsonable_encoder(exc.errors())
+    body_payload = None
+    if settings.DEBUG and exc.body is not None:
+        body_payload = jsonable_encoder(exc.body)
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={
             "error": {
                 "message": "Validation error",
-                "details": exc.errors(),
-                "body": exc.body if settings.DEBUG else None
+                "details": error_details,
+                "body": body_payload,
             }
         }
     )
@@ -321,7 +327,7 @@ async def health_check():
 
 
 @app.get("/api/status", tags=["Monitoring"])
-async def status():
+async def system_status():
     """Детальный статус системы"""
     from app.utils.monitoring import get_system_metrics
 

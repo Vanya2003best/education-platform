@@ -127,7 +127,79 @@ def _verify_native_pbkdf2(plain_password: str, hashed_password: str) -> bool:
         rounds,
     )
     return hmac.compare_digest(derived, stored)
+def _try_base64_decode(value: str) -> list[bytes]:
+    """Попытаться декодировать строку как base64/urlsafe-base64."""
+    candidates: list[bytes] = []
+    if not value:
+        return candidates
 
+    padded = value + "=" * (-len(value) % 4)
+    for decoder in (base64.b64decode, base64.urlsafe_b64decode):
+        try:
+            decoded = decoder(padded.encode("ascii"))
+        except (ValueError, binascii.Error):
+            continue
+        if decoded and decoded not in candidates:
+            candidates.append(decoded)
+    return candidates
+
+
+def _verify_werkzeug_pbkdf2(plain_password: str, hashed_password: str) -> bool:
+    """Проверка хеша формата pbkdf2:sha256:<rounds>$<salt>$<hash>."""
+    parts = hashed_password.split("$")
+    if len(parts) != 3:
+        return False
+
+    algo_part, salt, stored_hash = parts
+    try:
+        prefix, hash_name, rounds_str = algo_part.split(":", 2)
+    except ValueError:
+        return False
+
+    if prefix != "pbkdf2" or hash_name != "sha256":
+        return False
+
+    try:
+        rounds = int(rounds_str)
+    except ValueError:
+        return False
+
+    salt = salt.strip()
+    stored_hash = stored_hash.strip()
+    if not salt or not stored_hash:
+        return False
+
+    plain_bytes = plain_password.encode("utf-8")
+
+    def compare_candidate(derived: bytes) -> bool:
+        candidate_b64 = base64.b64encode(derived).decode("utf-8").strip()
+        if hmac.compare_digest(candidate_b64, stored_hash):
+            return True
+        if hmac.compare_digest(candidate_b64.rstrip("="), stored_hash.rstrip("=")):
+            return True
+        candidate_hex = binascii.hexlify(derived).decode("ascii")
+        if hmac.compare_digest(candidate_hex, stored_hash.lower()):
+            return True
+        return False
+
+    salt_variants = [salt.encode("utf-8")]
+    salt_variants.extend(_try_base64_decode(salt))
+
+    checked: set[bytes] = set()
+    for salt_bytes in salt_variants:
+        if not salt_bytes or salt_bytes in checked:
+            continue
+        checked.add(salt_bytes)
+        derived = hashlib.pbkdf2_hmac(
+            "sha256",
+            plain_bytes,
+            salt_bytes,
+            rounds,
+        )
+        if compare_candidate(derived):
+            return True
+
+    return False
 
 class AuthService:
     """Сервис аутентификации"""
@@ -176,24 +248,7 @@ class AuthService:
                     return _verify_native_pbkdf2(plain_password, hashed_password)
             # 2.1) формат werkzeug: pbkdf2:sha256:<rounds>$<salt>$<hash>
             if normalized_lower.startswith("pbkdf2:sha256:"):
-                parts = hashed_password.split("$")
-                if len(parts) == 3:
-                    algo_part, salt, stored_hash = parts
-                    try:
-                        _, hash_name, rounds_str = algo_part.split(":", 2)
-                        if hash_name != "sha256":
-                            return False
-                        rounds = int(rounds_str)
-                        derived = hashlib.pbkdf2_hmac(
-                            "sha256",
-                            plain_password.encode("utf-8"),
-                            salt.encode("utf-8"),
-                            rounds,
-                        )
-                        candidate = base64.b64encode(derived).decode("utf-8")
-                        return hmac.compare_digest(candidate, stored_hash)
-                    except (ValueError, TypeError):
-                        return False
+                return _verify_werkzeug_pbkdf2(plain_password, hashed_password)
             # 3) bcrypt
             if normalized.startswith(("2a$", "2b$", "2y$")):
                 if bcrypt is not None:
