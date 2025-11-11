@@ -141,6 +141,17 @@ class AuthService:
             if not hashed_password:
                 return False
 
+            # Страхуемся от неожиданных типов данных из БД
+            if isinstance(plain_password, (bytes, bytearray, memoryview)):
+                plain_password = bytes(plain_password).decode("utf-8", "ignore")
+            else:
+                plain_password = str(plain_password)
+
+            if isinstance(hashed_password, (bytes, bytearray, memoryview)):
+                hashed_password = bytes(hashed_password).decode("utf-8", "ignore")
+            else:
+                hashed_password = str(hashed_password)
+
             hashed_password = hashed_password.strip()
             normalized = hashed_password.lstrip("$")
             normalized_lower = normalized.lower()
@@ -163,7 +174,26 @@ class AuthService:
                 except Exception:
                     logger.exception("Passlib PBKDF2 verify failed, attempting native verifier")
                     return _verify_native_pbkdf2(plain_password, hashed_password)
-
+            # 2.1) формат werkzeug: pbkdf2:sha256:<rounds>$<salt>$<hash>
+            if normalized_lower.startswith("pbkdf2:sha256:"):
+                parts = hashed_password.split("$")
+                if len(parts) == 3:
+                    algo_part, salt, stored_hash = parts
+                    try:
+                        _, hash_name, rounds_str = algo_part.split(":", 2)
+                        if hash_name != "sha256":
+                            return False
+                        rounds = int(rounds_str)
+                        derived = hashlib.pbkdf2_hmac(
+                            "sha256",
+                            plain_password.encode("utf-8"),
+                            salt.encode("utf-8"),
+                            rounds,
+                        )
+                        candidate = base64.b64encode(derived).decode("utf-8")
+                        return hmac.compare_digest(candidate, stored_hash)
+                    except (ValueError, TypeError):
+                        return False
             # 3) bcrypt
             if normalized.startswith(("2a$", "2b$", "2y$")):
                 if bcrypt is not None:
@@ -192,7 +222,8 @@ class AuthService:
                 hashed_password.encode("utf-8")
             )
 
-        except ValueError as exc:
+
+        except (TypeError, ValueError) as exc:
             logger.warning("Password verify failed: %s", exc)
             return False
         except Exception:
