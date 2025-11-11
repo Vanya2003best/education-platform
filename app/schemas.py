@@ -1,7 +1,7 @@
 """
 Pydantic схемы для валидации данных API
 """
-from pydantic import BaseModel, EmailStr, Field, validator, ConfigDict
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, ValidationInfo, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from enum import Enum
@@ -48,8 +48,8 @@ class UserBase(BaseModel):
 class UserCreate(UserBase):
     password: str = Field(..., min_length=8, max_length=100)
 
-    @validator('password')
-    def validate_password(cls, v):
+    @field_validator('password')
+    def validate_password(cls, v: str) -> str:
         if len(v) < 8:
             raise ValueError('Password must be at least 8 characters')
         if not any(c.isupper() for c in v):
@@ -112,9 +112,10 @@ class PasswordChange(BaseModel):
     old_password: str
     new_password: str = Field(..., min_length=8)
 
-    @validator('new_password')
-    def passwords_different(cls, v, values):
-        if 'old_password' in values and v == values['old_password']:
+    @field_validator('new_password')
+    def passwords_different(cls, v: str, info: ValidationInfo) -> str:
+        old_password = info.data.get('old_password') if info.data else None
+        if old_password and v == old_password:
             raise ValueError('New password must be different from old password')
         return v
 
@@ -186,8 +187,7 @@ class TaskResponse(TaskBase):
     avg_score: float
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ===== SUBMISSION SCHEMAS =====
@@ -217,8 +217,7 @@ class SubmissionResponse(BaseModel):
     processing_time: Optional[float]
     attempt_number: int
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class SubmissionDetail(SubmissionResponse):
@@ -266,8 +265,7 @@ class ShopItemResponse(ShopItemBase):
     rating: Optional[float]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class PurchaseCreate(BaseModel):
@@ -284,8 +282,7 @@ class PurchaseResponse(BaseModel):
     status: str
     purchased_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ===== ACHIEVEMENT SCHEMAS =====
@@ -317,8 +314,7 @@ class AchievementResponse(AchievementBase):
     is_active: bool
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserAchievementResponse(BaseModel):
@@ -327,8 +323,7 @@ class UserAchievementResponse(BaseModel):
     progress: int
     is_claimed: bool
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ===== ANALYTICS SCHEMAS =====
@@ -386,8 +381,7 @@ class NotificationResponse(NotificationCreate):
     created_at: datetime
     read_at: Optional[datetime]
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ===== LEADERBOARD SCHEMAS =====
@@ -420,8 +414,7 @@ class TransactionResponse(BaseModel):
     gems_balance: Optional[int]
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 
 
 # ===== ADMIN SCHEMAS =====

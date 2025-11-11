@@ -1,15 +1,14 @@
 """
 Конфигурация приложения с валидацией и безопасностью
 """
-from pydantic_settings import BaseSettings
-from typing import Optional, List
 from functools import lru_cache
+from typing import List, Optional
 import secrets
-
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     """Настройки приложения из переменных окружения"""
-
+    model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
     # Database
     DATABASE_URL: str = "postgresql://user:password@localhost:5432/education_db"
     DATABASE_POOL_SIZE: int = 20
@@ -100,10 +99,6 @@ class Settings(BaseSettings):
     FEATURE_ACHIEVEMENTS: bool = True
     FEATURE_LEADERBOARD: bool = True
 
-    class Config:
-        env_file = ".env"
-        case_sensitive = True
-
     @property
     def database_url_async(self) -> str:
         """URL для async драйвера PostgreSQL"""
@@ -126,4 +121,6 @@ class Settings(BaseSettings):
 def get_settings() -> Settings:
     """Получить настройки (кэшированные)"""
     return Settings()
+
+
 settings = get_settings()

@@ -5,8 +5,7 @@ from sqlalchemy import (
     Column, Integer, String, DateTime, ForeignKey, Text, Boolean,
     Float, JSON, Enum, Index, UniqueConstraint, CheckConstraint
 )
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import declarative_base, relationship, validates
 from sqlalchemy.sql import func
 from datetime import datetime
 import enum

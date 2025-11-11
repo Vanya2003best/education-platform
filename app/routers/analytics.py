@@ -97,7 +97,7 @@ async def get_platform_overview(
 
 @router.get("/my/progress", response_model=UserProgress)
 async def get_user_progress(
-        period: str = Query("week", regex="^(week|month|year)$"),
+        period: str = Query("week", pattern="^(week|month|year)$"),
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_async_db)
 ):
