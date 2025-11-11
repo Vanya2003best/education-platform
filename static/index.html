@@ -719,6 +719,8 @@
 
                 // Загрузка данных
                 async loadUserData() {
+                    if (!this.token) return;
+
                     try {
                         const response = await fetch(`${this.apiUrl}/auth/me`, {
                             headers: { 'Authorization': `Bearer ${this.token}` }
@@ -729,6 +731,10 @@
                             await this.loadTasks();
                         } else {
                             this.logout();
+                            if (response.status === 401) {
+                                this.showNotification('Сессия истекла. Войдите снова.', 'error');
+                                this.authMode = 'login';
+                            }
                         }
                     } catch (error) {
                         console.error('Error loading user data:', error);
@@ -754,11 +760,24 @@
                 },
 
                 async loadSubmissions() {
+                    if (!this.token) {
+                        this.submissions = [];
+                        return;
+                    }
+
                     try {
                         const response = await fetch(`${this.apiUrl}/submissions/my-submissions`, {
                             headers: { 'Authorization': `Bearer ${this.token}` }
                         });
-                        this.submissions = await response.json();
+
+                        if (response.status === 401) {
+                            this.logout();
+                            this.authMode = 'login';
+                            this.showNotification('Сессия истекла. Пожалуйста, войдите снова.', 'error');
+                            return;
+                        }
+
+                        this.submissions = await parseJsonSafe(response);
                     } catch (error) {
                         console.error('Error loading submissions:', error);
                     }
@@ -805,6 +824,13 @@
                 async submitTask() {
                     if (!this.selectedFile || this.submitting) return;
 
+                    if (!this.token || typeof this.token !== 'string' || !this.token.includes('.')) {
+                        this.showNotification('Сессия недействительна. Пожалуйста, войдите заново.', 'error');
+                        this.logout();
+                        this.authMode = 'login';
+                        return;
+                    }
+
                     this.submitting = true;
 
                     const formData = new FormData();
@@ -818,7 +844,7 @@
                             body: formData
                         });
 
-                        const data = await response.json();
+                        const data = await parseJsonSafe(response);
 
                         if (response.ok) {
                             this.showNotification('Работа отправлена на проверку!', 'success');
@@ -827,6 +853,10 @@
 
                             // Проверяем статус через некоторое время
                             setTimeout(() => this.checkSubmissionStatus(data.id), 5000);
+                        } else if (response.status === 401) {
+                            this.showNotification('Сессия истекла. Пожалуйста, войдите снова.', 'error');
+                            this.logout();
+                            this.authMode = 'login';
                         } else {
                             this.showNotification(data.detail || 'Ошибка отправки', 'error');
                         }
