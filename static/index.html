@@ -650,9 +650,9 @@
 
                                 <div>
                                     <label class="block text-sm font-semibold text-gray-700 mb-2">Описание задания</label>
-                                    <textarea x-model="adminTaskForm.description" rows="3"
+                                    <textarea x-model="adminTaskForm.description" rows="3" minlength="10"
                                               class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
-                                              placeholder="Расскажите, что нужно сделать"></textarea>
+                                              placeholder="Расскажите, что нужно сделать (не менее 10 символов)"></textarea>
                                 </div>
 
                                 <div>
@@ -1086,9 +1086,31 @@
 
                 async loadTasks() {
                     try {
-                        const response = await fetch(`${this.apiUrl}/tasks`);
-                        const baseData = await parseJsonSafe(response);
-                        const generalTasks = Array.isArray(baseData) ? baseData : [];
+                        let generalTasks = [];
+                        let baseResponse;
+
+                        if (this.isAdmin() && this.token) {
+                            baseResponse = await fetch(`${this.apiUrl}/admin/tasks`, {
+                                headers: { 'Authorization': `Bearer ${this.token}` }
+                            });
+                        } else {
+                            baseResponse = await fetch(`${this.apiUrl}/tasks`);
+                        }
+
+                        let baseData = await parseJsonSafe(baseResponse);
+
+                        if (baseResponse.ok) {
+                            generalTasks = Array.isArray(baseData) ? baseData : [];
+                        } else if (this.isAdmin() && baseResponse.status !== 401) {
+                            // Пытаемся использовать публичный список заданий как запасной вариант
+                            const fallbackResponse = await fetch(`${this.apiUrl}/tasks`);
+                            baseData = await parseJsonSafe(fallbackResponse);
+                            if (fallbackResponse.ok) {
+                                generalTasks = Array.isArray(baseData) ? baseData : [];
+                            } else {
+                                console.error('Failed to load admin tasks:', baseData);
+                            }
+                        }
 
                         let assignedTasks = [];
                         if (this.token && this.user) {
@@ -1371,8 +1393,8 @@
                     const title = (this.adminTaskForm.title || '').trim();
                     const description = (this.adminTaskForm.description || '').trim();
 
-                    if (!title || description.length < 4) {
-                        this.showNotification('Заполните название и описание задания (минимум 4 символов)', 'error');
+                    if (!title || description.length < 10) {
+                        this.showNotification('Заполните название и описание задания (минимум 10 символов)', 'error');
                         return;
                     }
 

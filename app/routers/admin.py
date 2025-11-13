@@ -11,15 +11,11 @@ from app.database import get_async_db
 from app.models import (
     User, Task, Submission, ShopItem, Achievement,
     Transaction, Notification, UserRole, SubmissionStatus,
-    TaskAssignment
+    TaskAssignment, TaskStatus
 )
 from app.schemas import (
     AdminDashboard, BroadcastMessage, AdminTaskCreate,
     TaskResponse, TaskAssignmentRequest, AdminUserSummary
-)
-from app.schemas import (
-    AdminDashboard, BroadcastMessage, AdminTaskCreate,
-    TaskResponse, TaskAssignmentRequest
 )
 from app.auth import require_admin
 from app.utils.cache import cache_manager
@@ -225,6 +221,48 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
+@router.get("/tasks", response_model=List[TaskResponse])
+async def get_admin_tasks(
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db),
+        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
+        subject: Optional[str] = Query(None, max_length=50),
+        difficulty: Optional[int] = Query(None, ge=1, le=5),
+        task_type: Optional[str] = Query(None, max_length=50),
+        search: Optional[str] = Query(None, max_length=200)
+):
+    """Получить список заданий для административной панели"""
+
+    query = select(Task)
+
+    if not include_inactive:
+        query = query.where(Task.status == TaskStatus.ACTIVE)
+
+    if subject:
+        query = query.where(Task.subject == subject)
+
+    if difficulty is not None:
+        query = query.where(Task.difficulty == difficulty)
+
+    if task_type:
+        query = query.where(Task.task_type == task_type)
+
+    if search:
+        pattern = f"%{search.strip()}%"
+        query = query.where(
+            or_(
+                Task.title.ilike(pattern),
+                Task.description.ilike(pattern),
+                Task.subject.ilike(pattern)
+            )
+        )
+
+    result = await db.execute(
+        query.order_by(Task.created_at.desc())
+    )
+
+    return result.scalars().all()
+
 
 @router.post("/tasks", response_model=TaskResponse)
 async def create_task(

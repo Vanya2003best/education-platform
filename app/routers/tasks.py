@@ -9,6 +9,7 @@ from typing import List, Optional
 from app.database import get_async_db
 from app.models import Task, User, TaskStatus, TaskAssignment
 from app.schemas import TaskCreate, TaskResponse
+from app.utils.task_serializers import serialize_task, serialize_tasks
 from app.auth import get_current_user
 
 router = APIRouter()
@@ -45,7 +46,7 @@ async def get_tasks(
     )
     tasks = result.scalars().all()
 
-    return tasks
+    return serialize_tasks(tasks)
 
 
 @router.post("/", response_model=TaskResponse)
@@ -85,7 +86,7 @@ async def create_task(
     await db.commit()
     await db.refresh(new_task)
 
-    return new_task
+    return serialize_task(new_task)
 
 @router.get("/assigned", response_model=List[TaskResponse])
 async def get_assigned_tasks(
@@ -106,7 +107,7 @@ async def get_assigned_tasks(
 
     tasks = result.scalars().all()
 
-    return tasks
+    return serialize_tasks(tasks)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)
@@ -125,7 +126,7 @@ async def get_task(
     if not task:
         raise HTTPException(status_code=404, detail="Задание не найдено")
 
-    return task
+    return serialize_task(task)
 
 @router.get("/subjects/list")
 async def get_subjects(db: AsyncSession = Depends(get_async_db)):
