@@ -666,16 +666,17 @@
                                 <div class="grid md:grid-cols-2 gap-4">
                                     <div class="bg-white rounded-xl border border-purple-100 p-4">
                                         <h4 class="font-semibold text-gray-700 mb-3">Поиск учеников</h4>
-                                        <form @submit.prevent="searchUsers('create')" class="flex gap-2 mb-3">
+                                        <div class="flex gap-2 mb-3">
                                             <input type="text" x-model="adminSearchQueryCreate"
                                                    class="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
                                                    placeholder="Имя пользователя или email">
-                                            <button type="submit"
+                                            <button type="button"
+                                                    @click="searchUsers('create')"
                                                     class="px-4 py-2 gradient-bg text-white rounded-lg font-semibold hover:opacity-90">
                                                 <span x-show="!adminSearchLoadingCreate">Найти</span>
                                                 <span x-show="adminSearchLoadingCreate"><i class="fas fa-spinner fa-spin"></i></span>
                                             </button>
-                                        </form>
+                                        </div>
                                         <div x-show="adminSearchResultsCreate.length" class="space-y-2 max-h-40 overflow-y-auto pr-1">
                                             <template x-for="user in adminSearchResultsCreate" :key="`create-result-${user.id}`">
                                                 <div class="flex items-center justify-between bg-purple-50 border border-purple-100 rounded-lg px-3 py-2">
@@ -740,16 +741,18 @@
                                 <div class="grid md:grid-cols-2 gap-4">
                                     <div class="bg-purple-50 rounded-xl border border-purple-100 p-4">
                                         <h4 class="font-semibold text-gray-700 mb-3">Поиск учеников</h4>
-                                        <form @submit.prevent="searchUsers('assign')" class="flex gap-2 mb-3">
+                                        <div class="flex gap-2 mb-3">
                                             <input type="text" x-model="adminSearchQueryAssign"
+                                                   @keydown.enter.prevent="searchUsers('assign')"
                                                    class="flex-1 px-3 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
                                                    placeholder="Имя пользователя или email">
-                                            <button type="submit"
+                                            <button type="button"
+                                                    @click="searchUsers('assign')"
                                                     class="px-4 py-2 bg-purple-600 text-white rounded-lg font-semibold hover:bg-purple-700 transition">
                                                 <span x-show="!adminSearchLoadingAssign">Найти</span>
                                                 <span x-show="adminSearchLoadingAssign"><i class="fas fa-spinner fa-spin"></i></span>
                                             </button>
-                                        </form>
+                                        </div>
                                         <div x-show="adminSearchResultsAssign.length" class="space-y-2 max-h-40 overflow-y-auto pr-1">
                                             <template x-for="user in adminSearchResultsAssign" :key="`assign-result-${user.id}`">
                                                 <div class="flex items-center justify-between bg-white border border-purple-100 rounded-lg px-3 py-2">
@@ -1368,8 +1371,8 @@
                     const title = (this.adminTaskForm.title || '').trim();
                     const description = (this.adminTaskForm.description || '').trim();
 
-                    if (!title || description.length < 10) {
-                        this.showNotification('Заполните название и описание задания (минимум 10 символов)', 'error');
+                    if (!title || description.length < 4) {
+                        this.showNotification('Заполните название и описание задания (минимум 4 символов)', 'error');
                         return;
                     }
 
