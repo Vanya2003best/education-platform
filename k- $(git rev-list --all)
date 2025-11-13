@@ -1,0 +1,23 @@
+[33mcommit 86d452432a62a62f745ca904cf4646e0832d1d93[m
+Author: Vanya2003best <vanya.rufer2003@gmail.com>
+Date:   Tue Nov 11 19:05:11 2025 +0100
+
+    chore: re-add safe .env.example (no secret-like placeholder)
+
+[33mcommit 20f2ba266d92a1c2b368e1465b46bd14773c0c60[m
+Author: Vanya2003best <vanya.rufer2003@gmail.com>
+Date:   Tue Nov 11 14:48:08 2025 +0100
+
+    Initial commit: FastAPI app + structure16
+
+[33mcommit 1157d582506e4f7d820205f0fd9c08070b488ba0[m
+Author: Vanya2003best <vanya.rufer2003@gmail.com>
+Date:   Tue Nov 11 14:47:19 2025 +0100
+
+    Initial commit: FastAPI app + structure15
+
+[33mcommit aac92b59b6313828c8b8bbaec53c0293ce043d71[m
+Author: Vanya2003best <vanya.rufer2003@gmail.com>
+Date:   Thu Oct 23 19:35:56 2025 +0200
+
+    Initial commit: FastAPI app + structure

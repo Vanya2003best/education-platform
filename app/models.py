@@ -105,6 +105,13 @@ class User(Base):
     achievements = relationship("UserAchievement", back_populates="user", lazy="dynamic")
     created_tasks = relationship("Task", back_populates="creator", foreign_keys="Task.created_by")
     transactions = relationship("Transaction", back_populates="user", lazy="dynamic")
+    assigned_tasks = relationship(
+        "TaskAssignment",
+        back_populates="user",
+        foreign_keys="TaskAssignment.user_id",
+        cascade="all, delete-orphan",
+        lazy="dynamic"
+    )
 
     # Индексы
     __table_args__ = (
@@ -130,6 +137,7 @@ class Task(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
+    content_html = Column(Text)
 
     # Категоризация
     task_type = Column(String(50), nullable=False, index=True)
@@ -181,6 +189,12 @@ class Task(Base):
 
     # Связи
     submissions = relationship("Submission", back_populates="task", lazy="dynamic")
+    assignments = relationship(
+        "TaskAssignment",
+        back_populates="task",
+        cascade="all, delete-orphan",
+        lazy="selectin"
+    )
     creator = relationship("User", back_populates="created_tasks", foreign_keys=[created_by])
 
     # Индексы
@@ -262,6 +276,28 @@ class Submission(Base):
         Index('idx_submission_status_score', 'status', 'score'),
         Index('idx_submission_submitted_at', 'submitted_at'),
         UniqueConstraint('user_id', 'task_id', 'attempt_number', name='unique_user_task_attempt'),
+    )
+
+class TaskAssignment(Base):
+    """Назначение задач конкретным пользователям"""
+    __tablename__ = "task_assignments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    task_id = Column(Integer, ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    assigned_by = Column(Integer, ForeignKey("users.id"))
+    assigned_at = Column(DateTime, default=func.now(), nullable=False)
+    is_completed = Column(Boolean, default=False)
+    completed_at = Column(DateTime)
+
+    task = relationship("Task", back_populates="assignments")
+    user = relationship("User", back_populates="assigned_tasks", foreign_keys=[user_id])
+    assigner = relationship("User", foreign_keys=[assigned_by], overlaps="assigned_tasks")
+
+    __table_args__ = (
+        UniqueConstraint('task_id', 'user_id', name='uq_task_assignment'),
+        Index('idx_task_assignment_user', 'user_id'),
+        Index('idx_task_assignment_task', 'task_id'),
     )
 
 

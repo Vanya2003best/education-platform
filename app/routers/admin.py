@@ -1,18 +1,26 @@
 """
 API для административных функций
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, delete, update, and_
+from sqlalchemy import select, func, delete, update, and_, or_
 from typing import List, Optional
 from datetime import datetime, timedelta
 
 from app.database import get_async_db
 from app.models import (
     User, Task, Submission, ShopItem, Achievement,
-    Transaction, Notification, UserRole, SubmissionStatus
+    Transaction, Notification, UserRole, SubmissionStatus,
+    TaskAssignment
 )
-from app.schemas import AdminDashboard, BroadcastMessage
+from app.schemas import (
+    AdminDashboard, BroadcastMessage, AdminTaskCreate,
+    TaskResponse, TaskAssignmentRequest, AdminUserSummary
+)
+from app.schemas import (
+    AdminDashboard, BroadcastMessage, AdminTaskCreate,
+    TaskResponse, TaskAssignmentRequest
+)
 from app.auth import require_admin
 from app.utils.cache import cache_manager
 
@@ -145,6 +153,36 @@ async def broadcast_message(
         "recipients": len(user_ids)
     }
 
+@router.get("/users/search", response_model=List[AdminUserSummary])
+async def search_users(
+        q: str = Query(..., min_length=1, max_length=100, description="Строка поиска"),
+        limit: int = Query(15, ge=1, le=50),
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db)
+):
+    """Поиск пользователей для назначения заданий"""
+
+    search_value = q.strip()
+    if not search_value:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Строка поиска пуста")
+
+    pattern = f"%{search_value}%"
+
+    result = await db.execute(
+        select(User)
+        .where(
+            or_(
+                User.username.ilike(pattern),
+                User.email.ilike(pattern),
+                User.full_name.ilike(pattern)
+            )
+        )
+        .order_by(User.username.asc())
+        .limit(limit)
+    )
+
+    return result.scalars().all()
+
 
 @router.post("/coins/grant")
 async def grant_coins(
@@ -188,6 +226,137 @@ async def grant_coins(
         "new_balance": user.coins
     }
 
+@router.post("/tasks", response_model=TaskResponse)
+async def create_task(
+        task_data: AdminTaskCreate,
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db)
+):
+    """Создать новое задание и при необходимости назначить пользователям"""
+
+    new_task = Task(
+        title=task_data.title,
+        description=task_data.description,
+        content_html=task_data.content_html,
+        task_type=task_data.task_type,
+        subject=task_data.subject,
+        topic=task_data.topic,
+        tags=task_data.tags,
+        difficulty=task_data.difficulty,
+        min_level=task_data.min_level,
+        time_limit=task_data.time_limit,
+        max_attempts=task_data.max_attempts,
+        reward_coins=task_data.reward_coins,
+        reward_exp=task_data.reward_exp,
+        reward_gems=task_data.reward_gems,
+        checking_criteria=task_data.checking_criteria,
+        example_solution=task_data.example_solution,
+        hints=task_data.hints,
+        resources=task_data.resources,
+        image_url=task_data.image_url,
+        video_url=task_data.video_url,
+        created_by=current_user.id
+    )
+
+    db.add(new_task)
+    await db.flush()
+
+    if task_data.assigned_user_ids:
+        # Получаем список существующих пользователей
+        result = await db.execute(
+            select(User.id).where(User.id.in_(task_data.assigned_user_ids))
+        )
+        existing_user_ids = {row[0] for row in result.all()}
+        missing_users = set(task_data.assigned_user_ids) - existing_user_ids
+
+        if missing_users:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Пользователи не найдены: {sorted(missing_users)}"
+            )
+
+        existing_assignments = await db.execute(
+            select(TaskAssignment.user_id).where(
+                TaskAssignment.task_id == new_task.id,
+                TaskAssignment.user_id.in_(existing_user_ids)
+            )
+        )
+        already_assigned = {row[0] for row in existing_assignments.all()}
+        new_assignments = [
+            TaskAssignment(
+                task_id=new_task.id,
+                user_id=user_id,
+                assigned_by=current_user.id
+            )
+            for user_id in existing_user_ids - already_assigned
+        ]
+
+        db.add_all(new_assignments)
+
+    await db.commit()
+    await db.refresh(new_task)
+
+    await cache_manager.invalidate_pattern("tasks:*")
+
+    return new_task
+
+
+@router.post("/tasks/{task_id}/assign")
+async def assign_task(
+        task_id: int,
+        assignment: TaskAssignmentRequest,
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db)
+):
+    """Назначить существующее задание выбранным пользователям"""
+
+    result = await db.execute(select(Task).where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Задание не найдено")
+
+    result = await db.execute(
+        select(User.id).where(User.id.in_(assignment.user_ids))
+    )
+    existing_user_ids = {row[0] for row in result.all()}
+    missing_users = set(assignment.user_ids) - existing_user_ids
+
+    if missing_users:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Пользователи не найдены: {sorted(missing_users)}"
+        )
+
+    existing_assignments = await db.execute(
+        select(TaskAssignment.user_id).where(
+            TaskAssignment.task_id == task_id,
+            TaskAssignment.user_id.in_(existing_user_ids)
+        )
+    )
+    already_assigned = {row[0] for row in existing_assignments.all()}
+
+    new_assignments = [
+        TaskAssignment(
+            task_id=task_id,
+            user_id=user_id,
+            assigned_by=current_user.id
+        )
+        for user_id in existing_user_ids - already_assigned
+    ]
+
+    if new_assignments:
+        db.add_all(new_assignments)
+
+    await db.commit()
+
+    await cache_manager.invalidate_pattern("tasks:*")
+
+    return {
+        "message": "Задание назначено",
+        "task_id": task_id,
+        "assigned_count": len(new_assignments)
+    }
 
 @router.post("/tasks/bulk-activate")
 async def bulk_activate_tasks(

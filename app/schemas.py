@@ -139,7 +139,7 @@ class TaskBase(BaseModel):
     task_type: TaskTypeEnum
     subject: Optional[str] = Field(None, max_length=50)
     difficulty: int = Field(1, ge=1, le=5)
-
+    content_html: Optional[str] = None
 
 class TaskCreate(TaskBase):
     topic: Optional[str] = None
@@ -157,6 +157,8 @@ class TaskCreate(TaskBase):
     image_url: Optional[str] = None
     video_url: Optional[str] = None
 
+class AdminTaskCreate(TaskCreate):
+    assigned_user_ids: Optional[List[int]] = None
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -165,7 +167,7 @@ class TaskUpdate(BaseModel):
     reward_coins: Optional[int] = Field(None, ge=0)
     reward_exp: Optional[int] = Field(None, ge=0)
     is_active: Optional[bool] = None
-
+    content_html: Optional[str] = None
 
 class TaskResponse(TaskBase):
     id: int
@@ -189,7 +191,8 @@ class TaskResponse(TaskBase):
 
     model_config = ConfigDict(from_attributes=True)
 
-
+class TaskAssignmentRequest(BaseModel):
+    user_ids: List[int] = Field(..., min_length=1)
 # ===== SUBMISSION SCHEMAS =====
 
 class SubmissionCreate(BaseModel):
@@ -429,3 +432,12 @@ class BroadcastMessage(BaseModel):
     title: str = Field(..., min_length=1, max_length=200)
     message: str
     target: str = Field("all", pattern="^(all|students|teachers)$")
+
+
+class AdminUserSummary(BaseModel):
+    id: int
+    username: str
+    email: str
+    role: str
+
+    model_config = ConfigDict(from_attributes=True)
