@@ -146,16 +146,13 @@ app.add_middleware(RateLimitMiddleware, max_requests=settings.RATE_LIMIT_REQUEST
 # Подключение роутеров с префиксами и тегами
 app.include_router(auth.router, prefix="/api/auth", tags=["🔐 Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["👤 Users"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["📝 Tasks"])
+app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(submissions.router, prefix="/api/submissions", tags=["📸 Submissions"])
 app.include_router(coins.router, prefix="/api/coins", tags=["💰 Coins & Economy"])
 app.include_router(shop.router, prefix="/api/shop", tags=["🛍️ Shop"])
 app.include_router(achievements.router, prefix="/api/achievements", tags=["🏆 Achievements"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["📊 Analytics"])
-
-# Admin роутер только для админов
-if not settings.is_production or settings.DEBUG:
-    app.include_router(admin.router, prefix="/api/admin", tags=["⚙️ Admin"])
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
 
 # Статические файлы
 os.makedirs("uploads/submissions", exist_ok=True)
