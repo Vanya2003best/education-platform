@@ -221,17 +221,25 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-@router.api_route(
-    "/tasks",
-    methods=["GET", "HEAD", "OPTIONS"],
-    response_model=TaskListResponse,
-)
-@router.api_route(
-    "/tasks/",
-    methods=["GET", "HEAD", "OPTIONS"],
-    response_model=TaskListResponse,
-    include_in_schema=False,
-)
+@router.options("/tasks", include_in_schema=False)
+@router.options("/tasks/", include_in_schema=False)
+async def admin_tasks_preflight(request: Request) -> Response:
+    """Обрабатывать preflight-запросы для UI."""
+    requested_headers = request.headers.get(
+        "Access-Control-Request-Headers", "Authorization, Content-Type"
+    )
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers={
+            "Allow": ALLOW_ADMIN_TASK_METHODS,
+            "Access-Control-Allow-Methods": ALLOW_ADMIN_TASK_METHODS,
+            "Access-Control-Allow-Headers": requested_headers,
+        },
+    )
+
+
+@router.get("/tasks", response_model=TaskListResponse)
+@router.get("/tasks/", response_model=TaskListResponse, include_in_schema=False)
 async def get_admin_tasks(
         request: Request,
         response: Response,
@@ -246,18 +254,6 @@ async def get_admin_tasks(
         limit: int = Query(50, ge=1, le=200),
 ):
     """Получить список заданий для административной панели."""
-    if request.method == "OPTIONS":
-        requested_headers = request.headers.get(
-            "Access-Control-Request-Headers", "Authorization"
-        )
-        return Response(
-            status_code=status.HTTP_204_NO_CONTENT,
-            headers={
-                "Allow": ALLOW_ADMIN_TASK_METHODS,
-                "Access-Control-Allow-Methods": ALLOW_ADMIN_TASK_METHODS,
-                "Access-Control-Allow-Headers": requested_headers,
-            },
-        )
     filters = []
 
     if not include_inactive:
@@ -314,6 +310,7 @@ async def get_admin_tasks(
         )
 
     response.headers.update(total_header)
+    response.headers.setdefault("Allow", ALLOW_ADMIN_TASK_METHODS)
 
     if request.method == "HEAD":
         return Response(status_code=status.HTTP_200_OK, headers=total_header)

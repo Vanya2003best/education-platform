@@ -886,6 +886,15 @@
             return trimmed.replace(/\/+$/, '') || '/api';
         };
         const API_BASE = normalizeApiBase('/api');
+        const ensureTrailingSlash = (url) => url.endsWith('/') ? url : `${url}/`;
+        const resolveUrl = (url) => {
+            try {
+                return new URL(url, window.location.origin).toString();
+            } catch (error) {
+                console.warn('Failed to resolve URL, returning as-is', { url, error });
+                return url;
+            }
+        };
 
         const createDefaultUser = () => ({
             id: null,
@@ -912,19 +921,24 @@
         }
 
         async function fetchJson(url, options = {}) {
-            const method = (options.method || 'GET').toUpperCase();
+            const { _retryTrailingSlash = false, ...cleanOptions } = options;
+            const method = (cleanOptions.method || 'GET').toUpperCase();
             const headers = {
                 Accept: 'application/json',
-                ...(options.headers || {})
+                ...(cleanOptions.headers || {})
             };
-            if (method !== 'GET' && method !== 'HEAD' && !(options.body instanceof FormData)) {
+            if (method !== 'GET' && method !== 'HEAD' && !(cleanOptions.body instanceof FormData)) {
                 headers['Content-Type'] = 'application/json';
             }
             const authToken = localStorage.getItem('access_token');
             if (authToken && !('Authorization' in headers)) {
                 headers.Authorization = `Bearer ${authToken}`;
             }
-            const requestInit = { ...options, method, headers };
+            const requestInit = { ...cleanOptions, method, headers };
+
+            if ((method === 'GET' || method === 'HEAD') && 'body' in requestInit) {
+                delete requestInit.body;
+            }
 
             if (
                 requestInit.body != null &&
@@ -935,7 +949,20 @@
             ) {
                 requestInit.body = JSON.stringify(requestInit.body);
             }
-            const response = await fetch(url, requestInit);
+            let response;
+            try {
+                response = await fetch(url, requestInit);
+            } catch (networkError) {
+                const err = new Error('Network request failed');
+                err.status = 0;
+                err.cause = networkError;
+                err.payload = { detail: networkError?.message || 'Network request failed' };
+                throw err;
+            }
+
+            if (response.status === 405 && method === 'GET' && !_retryTrailingSlash && !url.endsWith('/')) {
+                return fetchJson(`${url}/`, { ...cleanOptions, _retryTrailingSlash: true });
+            }
             const payload = await parseJsonSafe(response);
 
             if (!response.ok) {
@@ -1171,7 +1198,7 @@
 
                         if (this.isAdmin() && this.token) {
                             try {
-                                baseTasks = await fetchJson(`${this.apiUrl}/admin/tasks`, {
+                                baseTasks = await fetchJson(ensureTrailingSlash(`${this.apiUrl}/admin/tasks`), {
                                     method: 'GET',
                                     headers: { 'Authorization': `Bearer ${this.token}` }
                                 });
@@ -1181,7 +1208,7 @@
                                     this.logout();
                                     return;
                                 }
-                                console.error('Failed to load admin tasks:', error.payload || error);
+                                // console.error('Failed to load admin tasks:', error.payload || error);
                             }
                         }
 

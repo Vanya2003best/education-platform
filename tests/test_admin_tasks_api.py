@@ -233,12 +233,14 @@ def test_public_tasks_endpoint_uses_same_serializer(client: TestClient) -> None:
             "/api/admin/tasks",
             headers={
                 "Origin": "http://localhost:3000",
-                "Access-Control-Request-Method": "GET",
-                "Access-Control-Request-Headers": "authorization",
+                "Access-Control-Request-Method": "POST",
+                "Access-Control-Request-Headers": "authorization, content-type",
             },
         )
         assert response.status_code in (200, 204)
-        assert "access-control-allow-methods" in {k.lower(): v for k, v in response.headers.items()}
+        headers = {k.lower(): v for k, v in response.headers.items()}
+        allow_methods = headers.get("access-control-allow-methods", "")
+        assert "post" in allow_methods.lower(), allow_methods
 
     def test_create_admin_task_accepts_complete_payload(client: TestClient) -> None:
         payload = {
