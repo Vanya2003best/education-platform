@@ -54,7 +54,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
         # Логируем начало запроса
         logger.info(
-            f"→ {request.method} {request.url.path}",
+        f"-> {request.method} {request.url.path}",
             extra={
                 "request_id": request_id,
                 "method": request.method,
@@ -101,7 +101,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             user_id = user_id.id if user_id else None
 
             log_level(
-                f"← {request.method} {request.url.path} → {response.status_code} ({process_time:.2f}ms)",
+            f"<- {request.method} {request.url.path} -> {response.status_code} ({process_time:.2f}ms)",
                 extra={
                     "request_id": request_id,
                     "method": request.method,
@@ -130,7 +130,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             process_time = (time.time() - start_time) * 1000
 
             logger.error(
-                f"✗ {request.method} {request.url.path} → ERROR ({process_time:.2f}ms)",
+            f"x {request.method} {request.url.path} -> ERROR ({process_time:.2f}ms)",
                 exc_info=True,
                 extra={
                     "request_id": request_id,

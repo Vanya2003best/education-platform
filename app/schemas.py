@@ -209,7 +209,8 @@ class TaskResponse(TaskBase):
     avg_score: float
     created_at: datetime
 
-    model_config = ConfigDict(from_attributes=True)
+    class Config:
+        from_attributes = True
 class TaskListResponse(BaseModel):
     """Унифицированный список заданий с общей статистикой."""
 
