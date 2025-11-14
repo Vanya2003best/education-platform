@@ -79,29 +79,10 @@ async def create_task(
     """
     Создать новое задание (для учителей/администраторов)
     """
-    new_task = Task(
-        title=task_data.title,
-        description=task_data.description,
-        content_html=task_data.content_html,
-        task_type=task_data.task_type,
-        subject=task_data.subject,
-        topic=task_data.topic,
-        tags=task_data.tags,
-        difficulty=task_data.difficulty,
-        min_level=task_data.min_level,
-        time_limit=task_data.time_limit,
-        max_attempts=task_data.max_attempts,
-        reward_coins=task_data.reward_coins,
-        reward_exp=task_data.reward_exp,
-        reward_gems=task_data.reward_gems,
-        checking_criteria=task_data.checking_criteria,
-        example_solution=task_data.example_solution,
-        hints=task_data.hints,
-        resources=task_data.resources,
-        image_url=task_data.image_url,
-        video_url=task_data.video_url,
-        created_by=current_user.id
-    )
+    task_payload = task_data.model_dump(exclude_unset=True)
+    task_payload["created_by"] = current_user.id
+
+    new_task = Task(**task_payload)
 
     db.add(new_task)
     await db.commit()

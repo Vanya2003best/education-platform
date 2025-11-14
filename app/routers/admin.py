@@ -304,40 +304,23 @@ async def create_task(
 ):
     """Создать новое задание и при необходимости назначить пользователям"""
 
-    new_task = Task(
-        title=task_data.title,
-        description=task_data.description,
-        content_html=task_data.content_html,
-        task_type=task_data.task_type,
-        subject=task_data.subject,
-        topic=task_data.topic,
-        tags=task_data.tags,
-        difficulty=task_data.difficulty,
-        min_level=task_data.min_level,
-        time_limit=task_data.time_limit,
-        max_attempts=task_data.max_attempts,
-        reward_coins=task_data.reward_coins,
-        reward_exp=task_data.reward_exp,
-        reward_gems=task_data.reward_gems,
-        checking_criteria=task_data.checking_criteria,
-        example_solution=task_data.example_solution,
-        hints=task_data.hints,
-        resources=task_data.resources,
-        image_url=task_data.image_url,
-        video_url=task_data.video_url,
-        created_by=current_user.id
-    )
+    task_payload = task_data.model_dump(exclude_unset=True)
+    assigned_user_ids = task_payload.pop("assigned_user_ids", None) or []
+    task_payload["created_by"] = current_user.id
+
+    new_task = Task(**task_payload)
 
     db.add(new_task)
     await db.flush()
 
-    if task_data.assigned_user_ids:
+    if assigned_user_ids:
+        unique_user_ids = set(assigned_user_ids)
         # Получаем список существующих пользователей
         result = await db.execute(
-            select(User.id).where(User.id.in_(task_data.assigned_user_ids))
+            select(User.id).where(User.id.in_(unique_user_ids))
         )
         existing_user_ids = {row[0] for row in result.all()}
-        missing_users = set(task_data.assigned_user_ids) - existing_user_ids
+        missing_users = unique_user_ids - existing_user_ids
 
         if missing_users:
             raise HTTPException(
@@ -345,13 +328,16 @@ async def create_task(
                 detail=f"Пользователи не найдены: {sorted(missing_users)}"
             )
 
-        existing_assignments = await db.execute(
-            select(TaskAssignment.user_id).where(
-                TaskAssignment.task_id == new_task.id,
-                TaskAssignment.user_id.in_(existing_user_ids)
-            )
+        already_assigned: set[int] = set()
+        if existing_user_ids:
+            existing_assignments = await db.execute(
+                select(TaskAssignment.user_id).where(
+                    TaskAssignment.task_id == new_task.id,
+                    TaskAssignment.user_id.in_(tuple(existing_user_ids))
+                )
         )
-        already_assigned = {row[0] for row in existing_assignments.all()}
+            already_assigned = {row[0] for row in existing_assignments.all()}
+
         new_assignments = [
             TaskAssignment(
                 task_id=new_task.id,
@@ -361,7 +347,8 @@ async def create_task(
             for user_id in existing_user_ids - already_assigned
         ]
 
-        db.add_all(new_assignments)
+        if new_assignments:
+            db.add_all(new_assignments)
 
     await db.commit()
     await db.refresh(new_task)

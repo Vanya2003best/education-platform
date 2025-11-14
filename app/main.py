@@ -102,6 +102,7 @@ async def lifespan(app: FastAPI):
 # Создание приложения
 app = FastAPI(
     title="Education Platform API",
+    redirect_slashes=True,
     description="AI-powered educational platform for handwriting assessment",
     version=settings.APP_VERSION,
     docs_url="/api/docs" if not settings.is_production else None,
