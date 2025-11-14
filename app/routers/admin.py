@@ -22,7 +22,11 @@ from app.auth import require_admin
 from app.utils.cache import cache_manager
 from app.utils.task_serializers import serialize_task, serialize_tasks
 router = APIRouter()
-
+@router.options("/tasks")
+@router.options("/tasks/")
+async def options_admin_tasks():
+    # Ничего не возвращаем, просто говорим «ок, метод поддержан»
+    return Response(status_code=204)
 
 @router.get("/dashboard", response_model=AdminDashboard)
 async def get_admin_dashboard(

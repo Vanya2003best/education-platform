@@ -4,7 +4,6 @@
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any
 from fastapi import Depends, HTTPException, status, Request
-from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -42,8 +41,6 @@ except ImportError:  # pragma: no cover - handled at runtime
 logger = logging.getLogger(__name__)
 
 # OAuth2 схемы
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
-bearer_scheme = HTTPBearer()
 
 
 def _get_bcrypt_rounds() -> int:
@@ -453,10 +450,16 @@ class AuthService:
 
 async def get_current_user(
     request: Request,
-    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_async_db)
 ) -> User:
-    token = credentials.credentials
+    auth_header = request.headers.get("Authorization", "")
+    scheme, _, token = auth_header.partition(" ")
+
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+        )
     payload = await AuthService.decode_token(token)
 
     if payload.get("type") != "access":
@@ -500,9 +503,22 @@ class RoleChecker:
             raise HTTPException(status_code=403, detail="Not enough permissions")
         return user
 
+async def get_admin_user(current_user: User = Depends(get_current_active_user)) -> User:
+    if current_user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not authenticated",
+        )
+    if current_user.role != UserRole.ADMIN:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admins only",
+        )
+    return current_user
+
 
 require_teacher = RoleChecker([UserRole.TEACHER, UserRole.ADMIN])
-require_admin = RoleChecker([UserRole.ADMIN])
+require_admin = get_admin_user
 require_student = RoleChecker([UserRole.STUDENT])
 
 

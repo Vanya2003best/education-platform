@@ -912,12 +912,21 @@
         }
 
         async function fetchJson(url, options = {}) {
-            const requestInit = { credentials: 'include', ...options };
+            const method = (options.method || 'GET').toUpperCase();
             const headers = {
-                'Content-Type': 'application/json',
-                Accept: 'application/json',
-                ...(options.headers || {})
+              Accept: 'application/json',
+              ...(options.headers || {})
             };
+            if (method !== 'GET' && method !== 'HEAD') {
+              headers['Content-Type'] = 'application/json';
+            }
+
+            const requestInit = { method, ...options, headers };
+
+            // если передали body как объект и это не GET/HEAD — сериализуем
+            if (requestInit.body && !(requestInit.body instanceof FormData) && method !== 'GET' && method !== 'HEAD') {
+              requestInit.body = JSON.stringify(requestInit.body);
+            }
 
             if (requestInit.body instanceof FormData) {
                 delete headers['Content-Type'];

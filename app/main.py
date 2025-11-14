@@ -149,7 +149,6 @@ if settings.is_production:
 
 # Кастомные middleware
 app.add_middleware(LoggingMiddleware)
-app.add_middleware(RateLimitMiddleware, max_requests=settings.RATE_LIMIT_REQUESTS)
 
 # Подключение роутеров с префиксами и тегами
 app.include_router(admin.router, prefix="/api/admin", tags=["admin"])

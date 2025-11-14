@@ -34,8 +34,10 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         super().__init__(app)
         self.max_requests = max_requests
         self.window_seconds = window_seconds
-        self.exempt_paths = (exempt_paths or ["/health", "/api/docs", "/api/redoc", "/api/openapi.json", "/static"])
-
+        self.exempt_paths = (exempt_paths or [
+            "/health", "/api/docs", "/api/redoc", "/api/openapi.json", "/openapi.json",
+            "/static", "/api/auth/login", "/api/auth/me", "/api/admin/tasks"
+        ])
         # In-memory хранилище (fallback)
         self.request_counts = defaultdict(list)
 
@@ -43,6 +45,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self, request: Request, call_next: Callable
     ) -> Response:
         try:
+            if request.method == "OPTIONS":
+                return await call_next(request)
             # Проверяем, нужно ли применять rate limiting
             if any(request.url.path.startswith(path) for path in self.exempt_paths):
                 return await call_next(request)
