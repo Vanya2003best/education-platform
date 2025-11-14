@@ -5,8 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Education Platform - AI Проверка Работ</title>
 
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind CSS (self-hosted build) -->
+    <link rel="stylesheet" href="/static/dist/tailwind-lite.css">
 
     <!-- Alpine.js для реактивности -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
@@ -880,10 +880,37 @@
     <script>
 
         async function parseJsonSafe(response) {
-          const ct = response.headers.get('content-type') || '';
-          if (ct.includes('application/json')) return await response.json();
-          const text = await response.text();
-          try { return JSON.parse(text); } catch { return { detail: text.trim() }; }
+          const contentType = response.headers.get('content-type') || '';
+            if (contentType.includes('application/json')) {
+                return await response.json();
+            }
+
+            const fallbackText = await response.text();
+            try {
+                return JSON.parse(fallbackText);
+            } catch {
+                return fallbackText ? { detail: fallbackText.trim() } : {};
+            }
+        }
+
+        async function fetchJson(url, options = {}) {
+            const requestInit = { ...options };
+            requestInit.headers = {
+                Accept: 'application/json',
+                ...(options.headers || {})
+            };
+
+            const response = await fetch(url, requestInit);
+            const payload = await parseJsonSafe(response);
+
+            if (!response.ok) {
+                const error = new Error(`HTTP ${response.status}`);
+                error.status = response.status;
+                error.payload = payload;
+                throw error;
+            }
+
+            return payload;
         }
 
         function app() {
@@ -1086,45 +1113,53 @@
 
                 async loadTasks() {
                     try {
-                        let generalTasks = [];
-                        let baseResponse;
+                        let baseTasks = { items: [], total: 0 };
 
                         if (this.isAdmin() && this.token) {
-                            baseResponse = await fetch(`${this.apiUrl}/admin/tasks`, {
-                                headers: { 'Authorization': `Bearer ${this.token}` }
-                            });
-                        } else {
-                            baseResponse = await fetch(`${this.apiUrl}/tasks`);
-                        }
-
-                        let baseData = await parseJsonSafe(baseResponse);
-
-                        if (baseResponse.ok) {
-                            generalTasks = Array.isArray(baseData) ? baseData : [];
-                        } else if (this.isAdmin() && baseResponse.status !== 401) {
-                            // Пытаемся использовать публичный список заданий как запасной вариант
-                            const fallbackResponse = await fetch(`${this.apiUrl}/tasks`);
-                            baseData = await parseJsonSafe(fallbackResponse);
-                            if (fallbackResponse.ok) {
-                                generalTasks = Array.isArray(baseData) ? baseData : [];
-                            } else {
-                                console.error('Failed to load admin tasks:', baseData);
+                        try {
+                                baseTasks = await fetchJson(`${this.apiUrl}/admin/tasks`, {
+                                    headers: { 'Authorization': `Bearer ${this.token}` }
+                                });
+                            } catch (error) {
+                                if (error.status === 401 || error.status === 403) {
+                                    this.showNotification('Сессия администратора истекла. Войдите заново.', 'error');
+                                    this.logout();
+                                    return;
+                                }
+                                console.error('Failed to load admin tasks:', error.payload || error);
                             }
                         }
 
-                        let assignedTasks = [];
+                        if (!Array.isArray(baseTasks.items) || !baseTasks.items.length) {
+                            try {
+                                baseTasks = await fetchJson(`${this.apiUrl}/tasks`);
+                            } catch (error) {
+                                console.error('Failed to load public tasks:', error.payload || error);
+                                baseTasks = { items: [], total: 0 };
+                            }
+                        }
+
+                        let assignedTasks = { items: [], total: 0 };
                         if (this.token && this.user) {
-                            const assignedResponse = await fetch(`${this.apiUrl}/tasks/assigned`, {
-                                headers: { 'Authorization': `Bearer ${this.token}` }
-                            });
-                            if (assignedResponse.ok) {
-                                const assignedData = await parseJsonSafe(assignedResponse);
-                                assignedTasks = Array.isArray(assignedData) ? assignedData : [];
+                            try {
+                                assignedTasks = await fetchJson(`${this.apiUrl}/tasks/assigned`, {
+                                    headers: { 'Authorization': `Bearer ${this.token}` }
+                                });
+                            } catch (error) {
+                                if (error.status === 401 || error.status === 403) {
+                                    this.showNotification('Авторизация истекла. Войдите снова.', 'error');
+                                    this.logout();
+                                    return;
+                                }
+                                console.error('Failed to load assigned tasks:', error.payload || error);
                             }
                         }
 
-                        const assignedIds = new Set((assignedTasks || []).map(task => task.id));
-                        const combined = [...(assignedTasks || []), ...(generalTasks || [])];
+                        const assignedItems = Array.isArray(assignedTasks.items) ? assignedTasks.items : [];
+                        const generalItems = Array.isArray(baseTasks.items) ? baseTasks.items : [];
+
+                        const assignedIds = new Set(assignedItems.map(task => task.id));
+                        const combined = [...assignedItems, ...generalItems];
                         const unique = [];
                         const seen = new Set();
 
@@ -1139,6 +1174,7 @@
                         this.filterTasks();
                     } catch (error) {
                         console.error('Error loading tasks:', error);
+                        this.showNotification('Не удалось загрузить задания', 'error');
                     }
                 },
 
@@ -1420,7 +1456,7 @@
                     };
 
                     try {
-                        const response = await fetch(`${this.apiUrl}/admin/tasks`, {
+                        await fetchJson(`${this.apiUrl}/admin/tasks`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${this.token}`,
@@ -1429,18 +1465,18 @@
                             body: JSON.stringify(payload)
                         });
 
-                        const data = await parseJsonSafe(response);
-
-                        if (response.ok) {
-                            this.showNotification('Задание успешно создано', 'success');
-                            this.resetAdminTaskForm();
-                            await this.loadTasks();
-                        } else {
-                            this.showNotification(data.detail || 'Не удалось создать задание', 'error');
-                        }
+                        this.showNotification('Задание успешно создано', 'success');
+                        this.resetAdminTaskForm();
+                        await this.loadTasks();
                     } catch (error) {
-                        console.error('Error creating task:', error);
-                        this.showNotification('Ошибка подключения при создании задания', 'error');
+                        if (error.status === 401 || error.status === 403) {
+                            this.showNotification('Недостаточно прав для создания задания', 'error');
+                            this.logout();
+                        } else {
+                            const details = error.payload?.detail || error.payload?.error?.message;
+                            this.showNotification(details || 'Не удалось создать задание', 'error');
+                            console.error('Error creating task:', error.payload || error);
+                        }
                     } finally {
                         this.adminCreating = false;
                     }
@@ -1470,7 +1506,7 @@
                     };
 
                     try {
-                        const response = await fetch(`${this.apiUrl}/admin/tasks/${taskId}/assign`, {
+                        await fetchJson(`${this.apiUrl}/admin/tasks/${taskId}/assign`, {
                             method: 'POST',
                             headers: {
                                 'Authorization': `Bearer ${this.token}`,
@@ -1479,21 +1515,21 @@
                             body: JSON.stringify(payload)
                         });
 
-                        const data = await parseJsonSafe(response);
-
-                        if (response.ok) {
-                            this.showNotification('Задание назначено выбранным ученикам', 'success');
-                            this.adminAssignTaskId = '';
-                            this.adminAssignAssignees = [];
-                            this.adminSearchQueryAssign = '';
-                            this.adminSearchResultsAssign = [];
-                            await this.loadTasks();
-                        } else {
-                            this.showNotification(data.detail || 'Не удалось назначить задание', 'error');
-                        }
+                        this.showNotification('Задание назначено выбранным ученикам', 'success');
+                        this.adminAssignTaskId = '';
+                        this.adminAssignAssignees = [];
+                        this.adminSearchQueryAssign = '';
+                        this.adminSearchResultsAssign = [];
+                        await this.loadTasks();
                     } catch (error) {
-                        console.error('Error assigning task:', error);
-                        this.showNotification('Ошибка при назначении задания', 'error');
+                        if (error.status === 401 || error.status === 403) {
+                            this.showNotification('Недостаточно прав для назначения задания', 'error');
+                            this.logout();
+                        } else {
+                            const details = error.payload?.detail || error.payload?.error?.message;
+                            this.showNotification(details || 'Не удалось назначить задание', 'error');
+                            console.error('Error assigning task:', error.payload || error);
+                        }
                     } finally {
                         this.adminAssigning = false;
                     }

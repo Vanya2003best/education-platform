@@ -15,11 +15,11 @@ from app.models import (
 )
 from app.schemas import (
     AdminDashboard, BroadcastMessage, AdminTaskCreate,
-    TaskResponse, TaskAssignmentRequest, AdminUserSummary
+    TaskResponse, TaskAssignmentRequest, AdminUserSummary, TaskListResponse
 )
 from app.auth import require_admin
 from app.utils.cache import cache_manager
-
+from app.utils.task_serializers import serialize_task, serialize_tasks
 router = APIRouter()
 
 
@@ -221,7 +221,7 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-@router.get("/tasks", response_model=List[TaskResponse])
+@router.get("/tasks", response_model=TaskListResponse)
 async def get_admin_tasks(
         current_user: User = Depends(require_admin),
         db: AsyncSession = Depends(get_async_db),
@@ -229,42 +229,53 @@ async def get_admin_tasks(
         subject: Optional[str] = Query(None, max_length=50),
         difficulty: Optional[int] = Query(None, ge=1, le=5),
         task_type: Optional[str] = Query(None, max_length=50),
-        search: Optional[str] = Query(None, max_length=200)
+        search: Optional[str] = Query(None, max_length=200),
+        skip: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200)
 ):
     """Получить список заданий для административной панели"""
 
-    query = select(Task)
+    filters = []
 
     if not include_inactive:
-        query = query.where(Task.status == TaskStatus.ACTIVE)
+        filters.append(Task.status == TaskStatus.ACTIVE)
 
     if subject:
-        query = query.where(Task.subject == subject)
+        filters.append(Task.subject == subject)
 
     if difficulty is not None:
-        query = query.where(Task.difficulty == difficulty)
+        filters.append(Task.difficulty == difficulty)
 
     if task_type:
-        query = query.where(Task.task_type == task_type)
+        filters.append(Task.task_type == task_type)
+
+        query = select(Task)
+        count_query = select(func.count(Task.id))
+
+        if filters:
+            query = query.where(*filters)
+            count_query = count_query.where(*filters)
 
     if search:
         pattern = f"%{search.strip()}%"
-        query = query.where(
-            or_(
-                Task.title.ilike(pattern),
-                Task.description.ilike(pattern),
-                Task.subject.ilike(pattern)
-            )
+        search_condition = or_(
+            Task.title.ilike(pattern),
+            Task.description.ilike(pattern),
+            Task.subject.ilike(pattern)
         )
+        query = query.where(search_condition)
+        count_query = count_query.where(search_condition)
 
     result = await db.execute(
-        query.order_by(Task.created_at.desc())
+        query.order_by(Task.created_at.desc()).offset(skip).limit(limit)
     )
+    tasks = result.scalars().all()
+    total = await db.scalar(count_query) or 0
+    serialized = serialize_tasks(tasks)
+    return TaskListResponse(items=serialized, total=total)
 
-    return result.scalars().all()
 
-
-@router.post("/tasks", response_model=TaskResponse)
+@router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(
         task_data: AdminTaskCreate,
         current_user: User = Depends(require_admin),
@@ -336,7 +347,7 @@ async def create_task(
 
     await cache_manager.invalidate_pattern("tasks:*")
 
-    return new_task
+    return serialize_task(new_task)
 
 
 @router.post("/tasks/{task_id}/assign")

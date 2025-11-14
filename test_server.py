@@ -9,11 +9,21 @@ import os
 import asyncio
 import traceback
 
+import pytest
+
+
+pytestmark = pytest.mark.anyio
+
+
+@pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
 # Add current directory to path
 sys.path.insert(0, os.getcwd())
 
 
-async def test_authentication_flow():
+async def test_authentication_flow(anyio_backend):
     """Test the complete authentication flow"""
 
     print("=" * 70)

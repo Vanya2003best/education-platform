@@ -1,21 +1,19 @@
-"""
-API для работы с заданиями
-"""
-from fastapi import APIRouter, Depends, HTTPException, Query
+"""API для работы с заданиями"""
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
-from typing import List, Optional
+from sqlalchemy import select, func
+from typing import Optional
 
 from app.database import get_async_db
 from app.models import Task, User, TaskStatus, TaskAssignment
-from app.schemas import TaskCreate, TaskResponse
-from app.utils.task_serializers import serialize_task, serialize_tasks
+from app.schemas import TaskCreate, TaskResponse, TaskListResponse
+from app.utils.task_serializers import serialize_task, serialize_tasks, build_task_list
 from app.auth import get_current_user
 
 router = APIRouter()
 
 
-@router.get("/", response_model=List[TaskResponse])
+@router.get("", response_model=TaskListResponse)
 async def get_tasks(
         skip: int = 0,
         limit: int = 20,
@@ -27,29 +25,30 @@ async def get_tasks(
     """
     Получить список заданий с фильтрами
     """
-    query = select(Task).where(Task.status == TaskStatus.ACTIVE)
+    filters = [Task.status == TaskStatus.ACTIVE]
 
     # Фильтры
     if subject:
-        query = query.where(Task.subject == subject)
+        filters.append(Task.subject == subject)
 
     if difficulty:
-        query = query.where(Task.difficulty == difficulty)
+        filters.append(Task.difficulty == difficulty)
 
     if task_type:
-        query = query.where(Task.task_type == task_type)
+        filters.append(Task.task_type == task_type)
+        base_query = select(Task).where(*filters)
+        count_query = select(func.count(Task.id)).where(*filters)
 
     result = await db.execute(
-        query.order_by(Task.created_at.desc())
-        .offset(skip)
-        .limit(limit)
+        base_query.order_by(Task.created_at.desc()).offset(skip).limit(limit)
     )
     tasks = result.scalars().all()
+    total = await db.scalar(count_query) or 0
+    serialized = serialize_tasks(tasks)
+    return TaskListResponse(items=serialized, total=total)
 
-    return serialize_tasks(tasks)
 
-
-@router.post("/", response_model=TaskResponse)
+@router.post("", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
 async def create_task(
         task_data: TaskCreate,
         current_user: User = Depends(get_current_user),
@@ -88,7 +87,7 @@ async def create_task(
 
     return serialize_task(new_task)
 
-@router.get("/assigned", response_model=List[TaskResponse])
+@router.get("/assigned", response_model=TaskListResponse)
 async def get_assigned_tasks(
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_async_db)
@@ -107,7 +106,7 @@ async def get_assigned_tasks(
 
     tasks = result.scalars().all()
 
-    return serialize_tasks(tasks)
+    return build_task_list(tasks)
 
 
 @router.get("/{task_id}", response_model=TaskResponse)

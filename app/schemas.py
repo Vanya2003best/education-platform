@@ -136,10 +136,30 @@ class TokenData(BaseModel):
 class TaskBase(BaseModel):
     title: str = Field(..., min_length=3, max_length=200)
     description: str = Field(..., min_length=10)
-    task_type: TaskTypeEnum
+    task_type: str = Field(..., min_length=1, max_length=50)
     subject: Optional[str] = Field(None, max_length=50)
     difficulty: int = Field(1, ge=1, le=5)
     content_html: Optional[str] = None
+
+    @field_validator("task_type", mode="before")
+    def normalize_task_type(cls, value: Any) -> str:
+        """Normalize task_type values from a variety of legacy sources."""
+        if value is None:
+            return "general"
+
+        if isinstance(value, TaskTypeEnum):
+            return value.value
+
+        if isinstance(value, str):
+            normalized = value.strip()
+            return normalized or "general"
+
+        try:
+            normalized = str(value).strip()
+        except Exception as exc:  # pragma: no cover - extremely defensive
+            raise ValueError("Invalid task_type value") from exc
+
+        return normalized or "general"
 
 class TaskCreate(TaskBase):
     topic: Optional[str] = None
@@ -190,7 +210,11 @@ class TaskResponse(TaskBase):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+class TaskListResponse(BaseModel):
+    """Унифицированный список заданий с общей статистикой."""
 
+    items: List[TaskResponse]
+    total: int
 class TaskAssignmentRequest(BaseModel):
     user_ids: List[int] = Field(..., min_length=1)
 # ===== SUBMISSION SCHEMAS =====
