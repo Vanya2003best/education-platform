@@ -914,46 +914,35 @@
         async function fetchJson(url, options = {}) {
             const method = (options.method || 'GET').toUpperCase();
             const headers = {
-              Accept: 'application/json',
-              ...(options.headers || {})
+                Accept: 'application/json',
+                ...(options.headers || {})
             };
-            if (method !== 'GET' && method !== 'HEAD') {
-              headers['Content-Type'] = 'application/json';
+            if (method !== 'GET' && method !== 'HEAD' && !(options.body instanceof FormData)) {
+                headers['Content-Type'] = 'application/json';
             }
-
-            const requestInit = { method, ...options, headers };
-
-            // если передали body как объект и это не GET/HEAD — сериализуем
-            if (requestInit.body && !(requestInit.body instanceof FormData) && method !== 'GET' && method !== 'HEAD') {
-              requestInit.body = JSON.stringify(requestInit.body);
-            }
-
-            if (requestInit.body instanceof FormData) {
-                delete headers['Content-Type'];
-            }
-
             const authToken = localStorage.getItem('access_token');
             if (authToken && !('Authorization' in headers)) {
                 headers.Authorization = `Bearer ${authToken}`;
             }
+            const requestInit = { ...options, method, headers };
 
-            requestInit.headers = headers;
+            if (
+                requestInit.body != null &&
+                !(requestInit.body instanceof FormData) &&
+                method !== 'GET' &&
+                method !== 'HEAD' &&
+                typeof requestInit.body !== 'string'
+            ) {
+                requestInit.body = JSON.stringify(requestInit.body);
+            }
             const response = await fetch(url, requestInit);
             const payload = await parseJsonSafe(response);
 
             if (!response.ok) {
-                const statusText = response.statusText ? ` ${response.statusText}` : '';
-                let detail = '';
-                if (payload && typeof payload === 'object') {
-                    detail = payload.detail || payload.message || '';
-                } else if (typeof payload === 'string') {
-                    detail = payload;
-                }
-                const suffix = detail ? `: ${detail}` : '';
-                const error = new Error(`HTTP ${response.status}${statusText}${suffix}`.trim());
-                error.status = response.status;
-                error.payload = payload;
-                throw error;
+                const err = new Error(`HTTP ${response.status}${response.statusText ? ` ${response.statusText}` : ''}`);
+                err.status = response.status;
+                err.payload = payload;
+                throw err;
             }
 
             if (response.status === 204) {
@@ -1183,6 +1172,7 @@
                         if (this.isAdmin() && this.token) {
                             try {
                                 baseTasks = await fetchJson(`${this.apiUrl}/admin/tasks`, {
+                                    method: 'GET',
                                     headers: { 'Authorization': `Bearer ${this.token}` }
                                 });
                             } catch (error) {
@@ -1526,10 +1516,9 @@
                         await fetchJson(`${this.apiUrl}/admin/tasks`, {
                             method: 'POST',
                             headers: {
-                                'Authorization': `Bearer ${this.token}`,
-                                'Content-Type': 'application/json'
+                                'Authorization': `Bearer ${this.token}`
                             },
-                            body: JSON.stringify(payload)
+                            body: payload
                         });
 
                         this.showNotification('Задание успешно создано', 'success');
@@ -1576,10 +1565,9 @@
                         await fetchJson(`${this.apiUrl}/admin/tasks/${taskId}/assign`, {
                             method: 'POST',
                             headers: {
-                                'Authorization': `Bearer ${this.token}`,
-                                'Content-Type': 'application/json'
+                                'Authorization': `Bearer ${this.token}`
                             },
-                            body: JSON.stringify(payload)
+                            body: payload
                         });
 
                         this.showNotification('Задание назначено выбранным ученикам', 'success');

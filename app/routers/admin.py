@@ -22,12 +22,7 @@ from app.auth import require_admin
 from app.utils.cache import cache_manager
 from app.utils.task_serializers import serialize_task, serialize_tasks
 router = APIRouter()
-@router.options("/tasks")
-@router.options("/tasks/")
-async def options_admin_tasks():
-    # Ничего не возвращаем, просто говорим «ок, метод поддержан»
-    return Response(status_code=204)
-
+ALLOW_ADMIN_TASK_METHODS = "GET, HEAD, OPTIONS, POST"
 @router.get("/dashboard", response_model=AdminDashboard)
 async def get_admin_dashboard(
         current_user: User = Depends(require_admin),
@@ -226,7 +221,17 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-@router.get("/tasks", response_model=TaskListResponse)
+@router.api_route(
+    "/tasks",
+    methods=["GET", "HEAD", "OPTIONS"],
+    response_model=TaskListResponse,
+)
+@router.api_route(
+    "/tasks/",
+    methods=["GET", "HEAD", "OPTIONS"],
+    response_model=TaskListResponse,
+    include_in_schema=False,
+)
 async def get_admin_tasks(
         request: Request,
         response: Response,
@@ -241,7 +246,18 @@ async def get_admin_tasks(
         limit: int = Query(50, ge=1, le=200),
 ):
     """Получить список заданий для административной панели."""
-
+    if request.method == "OPTIONS":
+        requested_headers = request.headers.get(
+            "Access-Control-Request-Headers", "Authorization"
+        )
+        return Response(
+            status_code=status.HTTP_204_NO_CONTENT,
+            headers={
+                "Allow": ALLOW_ADMIN_TASK_METHODS,
+                "Access-Control-Allow-Methods": ALLOW_ADMIN_TASK_METHODS,
+                "Access-Control-Allow-Headers": requested_headers,
+            },
+        )
     filters = []
 
     if not include_inactive:
@@ -290,13 +306,17 @@ async def get_admin_tasks(
         total = len(tasks)
     serialized = serialize_tasks(tasks)
     user_agent = request.headers.get("user-agent", "").lower()
+    total_header = {"X-Total-Count": str(total)}
     if user_agent.startswith("testclient"):
         return JSONResponse(
             content=[item.model_dump(mode="json") for item in serialized],
-            headers={"X-Total-Count": str(total)},
+            headers=total_header,
         )
 
-    response.headers["X-Total-Count"] = str(total)
+    response.headers.update(total_header)
+
+    if request.method == "HEAD":
+        return Response(status_code=status.HTTP_200_OK, headers=total_header)
     return TaskListResponse(items=serialized, total=total)
 
 

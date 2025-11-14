@@ -79,22 +79,43 @@ class DummyTask:
 
 
 class DummyResult:
-    def __init__(self, tasks: list[DummyTask]) -> None:
+    def __init__(self, tasks: list[Any]) -> None:
         self._tasks = tasks
 
     def scalars(self) -> "DummyResult":
         return self
 
-    def all(self) -> list[DummyTask]:
+    def scalar_one(self) -> int:
+        return len(self._tasks)
+
+    def scalar(self) -> int:
+        return len(self._tasks)
+
+    def first(self) -> tuple[int]:
+        return (len(self._tasks),)
+
+    def all(self) -> list[Any]:
         return self._tasks
 
 
 class DummySession:
     def __init__(self, tasks: list[DummyTask]) -> None:
-        self._tasks = tasks
+        self._tasks: list[Any] = list(tasks)
+        existing_ids = [getattr(task, "id", 0) for task in self._tasks]
+        self._next_id = (max(existing_ids) if existing_ids else 0) + 1
 
     async def execute(self, *args: Any, **kwargs: Any) -> DummyResult:
         return DummyResult(self._tasks)
+
+    def add(self, obj: Any) -> None:
+        if getattr(obj, "id", None) in (None, 0):
+            setattr(obj, "id", self._next_id)
+            self._next_id += 1
+        self._tasks.append(obj)
+
+    def add_all(self, objects: list[Any]) -> None:  # pragma: no cover - compatibility
+        for obj in objects:
+            self.add(obj)
 
     async def commit(self) -> None:  # pragma: no cover - API compatibility
         return None
@@ -104,6 +125,28 @@ class DummySession:
 
     async def close(self) -> None:  # pragma: no cover - API compatibility
         return None
+
+    async def flush(self) -> None:
+        return None
+
+    async def refresh(self, obj: Any) -> None:
+        if getattr(obj, "created_at", None) is None:
+            obj.created_at = datetime.utcnow()
+        if getattr(obj, "updated_at", None) is None:
+            obj.updated_at = obj.created_at
+        defaults = {
+            "status": TaskStatus.ACTIVE,
+            "submissions_count": 0,
+            "success_rate": 0.0,
+            "avg_score": 0.0,
+            "reward_gems": getattr(obj, "reward_gems", 0) or 0,
+            "bonus_coins": getattr(obj, "bonus_coins", 0) or 0,
+            "is_premium": getattr(obj, "is_premium", False) or False,
+            "is_featured": getattr(obj, "is_featured", False) or False,
+        }
+        for key, value in defaults.items():
+            if getattr(obj, key, None) is None:
+                setattr(obj, key, value)
 
 
 @pytest.fixture
@@ -122,12 +165,14 @@ def client() -> Iterator[TestClient]:
     original_connect = app_main.cache_manager.connect
     original_disconnect = app_main.cache_manager.disconnect
     original_is_connected = app_main.cache_manager.is_connected
+    original_invalidate = app_main.cache_manager.invalidate_pattern
 
     app_main.init_db = AsyncMock()
     app_main.close_db = AsyncMock()
     app_main.cache_manager.connect = AsyncMock()
     app_main.cache_manager.disconnect = AsyncMock()
     app_main.cache_manager.is_connected = lambda: False
+    app_main.cache_manager.invalidate_pattern = AsyncMock()
 
     with TestClient(app) as test_client:
         yield test_client
@@ -139,12 +184,13 @@ def client() -> Iterator[TestClient]:
     app_main.cache_manager.connect = original_connect
     app_main.cache_manager.disconnect = original_disconnect
     app_main.cache_manager.is_connected = original_is_connected
+    app_main.cache_manager.invalidate_pattern = original_invalidate
 
 
 def test_admin_tasks_endpoint_returns_sanitized_payload(client: TestClient) -> None:
     response = client.get("/api/admin/tasks", headers={"Authorization": "Bearer token"})
     assert response.status_code == 200
-
+    assert response.headers.get("X-Total-Count") == "1"
     data = response.json()
     assert isinstance(data, list)
     assert data, "Expected at least one task in response"
@@ -181,3 +227,44 @@ def test_public_tasks_endpoint_uses_same_serializer(client: TestClient) -> None:
     serialized = serialize_task(DummyTask())
     assert data[0]["task_type"] == serialized.task_type
     assert data[0]["subject"] == serialized.subject
+
+    def test_admin_tasks_preflight_options_request(client: TestClient) -> None:
+        response = client.options(
+            "/api/admin/tasks",
+            headers={
+                "Origin": "http://localhost:3000",
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "authorization",
+            },
+        )
+        assert response.status_code in (200, 204)
+        assert "access-control-allow-methods" in {k.lower(): v for k, v in response.headers.items()}
+
+    def test_create_admin_task_accepts_complete_payload(client: TestClient) -> None:
+        payload = {
+            "title": "Практическое задание №1",
+            "description": "Сделайте то-то и приложите решение.",
+            "task_type": "essay",
+            "subject": "Русский язык",
+            "difficulty": 2,
+            "reward_coins": 20,
+            "reward_exp": 100,
+            "min_level": 1,
+            "max_attempts": 3,
+            "time_limit": None,
+            "content_html": "<h2>Практическое задание</h2>",
+            "assigned_user_ids": [],
+        }
+
+        response = client.post(
+            "/api/admin/tasks",
+            headers={"Authorization": "Bearer token"},
+            json=payload,
+        )
+
+        assert response.status_code == 201
+        data = response.json()
+        assert data["title"] == payload["title"]
+        assert data["content_html"] == payload["content_html"]
+        assert data["difficulty"] == payload["difficulty"]
+        assert data["reward_coins"] == payload["reward_coins"]
