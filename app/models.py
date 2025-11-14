@@ -137,7 +137,7 @@ class Task(Base):
     id = Column(Integer, primary_key=True, index=True)
     title = Column(String(200), nullable=False)
     description = Column(Text, nullable=False)
-    content_html = Column(Text)
+    content_html = Column(Text, nullable=True)
 
     # Категоризация
     task_type = Column(String(50), nullable=False, index=True)

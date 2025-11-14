@@ -33,8 +33,15 @@ from app.utils.logger import setup_logging
 
 # Импорт роутеров
 from app.routers import (
-    auth, tasks, submissions, coins, shop,
-    users, achievements, analytics, admin
+    admin,
+    tasks,
+    auth,
+    submissions,
+    coins,
+    shop,
+    users,
+    achievements,
+    analytics,
 )
 
 # Настройка логирования
@@ -144,15 +151,25 @@ app.add_middleware(LoggingMiddleware)
 app.add_middleware(RateLimitMiddleware, max_requests=settings.RATE_LIMIT_REQUESTS)
 
 # Подключение роутеров с префиксами и тегами
+app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(auth.router, prefix="/api/auth", tags=["🔐 Authentication"])
 app.include_router(users.router, prefix="/api/users", tags=["👤 Users"])
-app.include_router(tasks.router, prefix="/api/tasks", tags=["tasks"])
 app.include_router(submissions.router, prefix="/api/submissions", tags=["📸 Submissions"])
 app.include_router(coins.router, prefix="/api/coins", tags=["💰 Coins & Economy"])
 app.include_router(shop.router, prefix="/api/shop", tags=["🛍️ Shop"])
 app.include_router(achievements.router, prefix="/api/achievements", tags=["🏆 Achievements"])
 app.include_router(analytics.router, prefix="/api/analytics", tags=["📊 Analytics"])
-app.include_router(admin.router, prefix="/api/admin", tags=["admin"])
+
+# Автоматический редирект между /path и /path/
+app.router.redirect_slashes = True
+
+# Временный дамп маршрутов для отладки
+for route in app.router.routes:
+    try:
+        print("ROUTE:", route.path, getattr(route, "methods", None))
+    except Exception:
+        pass
 
 # Статические файлы
 os.makedirs("uploads/submissions", exist_ok=True)

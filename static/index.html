@@ -139,16 +139,16 @@
                     </h1>
                 </div>
 
-                <div class="flex items-center space-x-6" x-show="user">
+                <div class="flex items-center space-x-6" x-show="isAuthenticated">
                     <!-- Статистика в навбаре -->
                     <div class="hidden md:flex items-center space-x-4">
                         <div class="flex items-center space-x-2">
                             <i class="fas fa-coins text-yellow-500"></i>
-                            <span class="font-semibold" x-text="user?.coins || 0"></span>
+                            <span class="font-semibold" x-text="user?.coins ?? 0"></span>
                         </div>
                         <div class="flex items-center space-x-2">
                             <i class="fas fa-star text-purple-500"></i>
-                            <span class="font-semibold">Ур. <span x-text="user?.level || 1"></span></span>
+                            <span class="font-semibold">Ур. <span x-text="user?.level ?? 1"></span></span>
                         </div>
                     </div>
 
@@ -157,9 +157,9 @@
                         <button @click="showProfile = !showProfile"
                                 class="flex items-center space-x-2 bg-gray-100 rounded-full px-4 py-2 hover:bg-gray-200 transition">
                             <img src="https://ui-avatars.com/api/?background=667eea&color=fff&name="
-                                 :src="'https://ui-avatars.com/api/?background=667eea&color=fff&name=' + (user?.username || 'U')"
+                                 :src="'https://ui-avatars.com/api/?background=667eea&color=fff&name=' + (user?.username ?? 'U')"
                                  class="w-8 h-8 rounded-full">
-                            <span x-text="user?.username || 'Гость'"></span>
+                            <span x-text="user?.username ?? 'Гость'"></span>
                             <i class="fas fa-chevron-down text-sm"></i>
                         </button>
 
@@ -193,7 +193,7 @@
     <div class="container mx-auto px-4 py-8">
 
         <!-- Экран входа -->
-        <div x-show="!user" class="max-w-md mx-auto fade-in">
+        <div x-show="!isAuthenticated" class="max-w-md mx-auto fade-in">
             <div class="bg-white rounded-2xl shadow-xl p-8">
                 <h2 class="text-3xl font-bold text-center mb-8 gradient-text">
                     Добро пожаловать!
@@ -231,7 +231,7 @@
 
                     <div>
                         <label class="block text-sm font-medium text-gray-700 mb-2">Пароль</label>
-                        <input type="password" name="password" :autocomplete="authMode === 'register' ? 'new-password' : 'current-password'" x-model="authData.password"
+                        <input type="password" name="password" autocomplete="current-password" x-model="authData.password"
                                class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 focus:outline-none"
                                placeholder="••••••••">
                     </div>
@@ -260,7 +260,7 @@
         </div>
 
         <!-- Главный интерфейс -->
-        <div x-show="user" class="fade-in">
+        <div x-show="isAuthenticated" class="fade-in">
 
             <!-- Статистика пользователя -->
             <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
@@ -268,7 +268,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-500 text-sm">Монеты</p>
-                            <p class="text-3xl font-bold text-yellow-500" x-text="user?.coins || 0"></p>
+                            <p class="text-3xl font-bold text-yellow-500" x-text="user?.coins ?? 0"></p>
                         </div>
                         <i class="fas fa-coins text-4xl text-yellow-400 opacity-30"></i>
                     </div>
@@ -278,14 +278,14 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-500 text-sm">Уровень</p>
-                            <p class="text-3xl font-bold text-purple-500" x-text="user?.level || 1"></p>
+                            <p class="text-3xl font-bold text-purple-500" x-text="user?.level ?? 1"></p>
                         </div>
                         <i class="fas fa-star text-4xl text-purple-400 opacity-30"></i>
                     </div>
                     <div class="mt-2">
                         <div class="w-full bg-gray-200 rounded-full h-2">
                             <div class="progress-bar h-2 rounded-full"
-                                 :style="'width: ' + ((user?.experience % 100) || 0) + '%'"></div>
+                                 :style="'width: ' + (Number(user?.experience ?? 0) % 100) + '%'"></div>
                         </div>
                     </div>
                 </div>
@@ -294,7 +294,7 @@
                     <div class="flex items-center justify-between">
                         <div>
                             <p class="text-gray-500 text-sm">Выполнено</p>
-                            <p class="text-3xl font-bold text-green-500" x-text="user?.tasks_completed || 0"></p>
+                            <p class="text-3xl font-bold text-green-500" x-text="user?.tasks_completed ?? 0"></p>
                         </div>
                         <i class="fas fa-check-circle text-4xl text-green-400 opacity-30"></i>
                     </div>
@@ -305,7 +305,7 @@
                         <div>
                             <p class="text-gray-500 text-sm">Средний балл</p>
                             <p class="text-3xl font-bold text-blue-500">
-                                <span x-text="(user?.average_score || 0).toFixed(1)"></span>
+                                <span x-text="Number(user?.average_score ?? 0).toFixed(1)"></span>
                             </p>
                         </div>
                         <i class="fas fa-chart-line text-4xl text-blue-400 opacity-30"></i>
@@ -498,10 +498,10 @@
                                         </span>
                                     </div>
                                     <button @click="purchaseItem(item)"
-                                            :disabled="user.coins < item.price"
-                                            :class="user.coins >= item.price ? 'gradient-bg hover:opacity-90' : 'bg-gray-300 cursor-not-allowed'"
+                                            :disabled="(user?.coins ?? 0) < item.price"
+                                            :class="(user?.coins ?? 0) >= item.price ? 'gradient-bg hover:opacity-90' : 'bg-gray-300 cursor-not-allowed'"
                                             class="w-full text-white py-2 rounded-lg font-semibold transition">
-                                        <span x-text="user.coins >= item.price ? 'Купить' : 'Недостаточно монет'"></span>
+                                        <span x-text="(user?.coins ?? 0) >= item.price ? 'Купить' : 'Недостаточно монет'"></span>
                                     </button>
                                 </div>
                             </template>
@@ -878,7 +878,16 @@
     </div>
 
     <script>
-
+        const createDefaultUser = () => ({
+            id: null,
+            role: 'guest',
+            coins: 0,
+            level: 1,
+            experience: 0,
+            tasks_completed: 0,
+            average_score: 0,
+            username: 'Гость'
+        });
         async function parseJsonSafe(response) {
           const contentType = response.headers.get('content-type') || '';
             if (contentType.includes('application/json')) {
@@ -924,7 +933,8 @@
                 apiUrl: '/api',
 
                 // Состояние
-                user: null,
+                user: createDefaultUser(),
+                isAuthenticated: false,
                 token: localStorage.getItem('access_token'),
                 authMode: 'login',
                 authData: {
@@ -983,6 +993,8 @@
                 async init() {
                     if (this.token) {
                         await this.loadUserData();
+                    } else {
+                        await this.loadTasks();
                     }
                 },
 
@@ -1064,9 +1076,10 @@
                     await this.login();
                 },
 
-                logout() {
+                logout(showMessage = true) {
                     this.token = null;
-                    this.user = null;
+                    this.user = createDefaultUser();
+                    this.isAuthenticated = false;
                     this.tasks = [];
                     this.filteredTasks = [];
                     this.assignedTaskIds = [];
@@ -1084,38 +1097,46 @@
                     }
                     this.activeTab = 'tasks';
                     localStorage.removeItem('access_token');
-                    this.showNotification('Вы вышли из системы', 'info');
+                    if (showMessage) {
+                        this.showNotification('Вы вышли из системы', 'info');
+                    }
                 },
 
                 isAdmin() {
-                    return this.user && this.user.role === 'admin';
+                    return this.isAuthenticated && this.user?.role === 'admin';
                 },
 
                 // Загрузка данных
                 async loadUserData() {
-                    if (!this.token) return;
+                    if (!this.token) {
+                        this.user = createDefaultUser();
+                        this.isAuthenticated = false;
+                        await this.loadTasks();
+                        return;
+                    }
 
                     try {
-                        const response = await fetch(`${this.apiUrl}/auth/me`, {
+                        const userData = await fetchJson(`${this.apiUrl}/auth/me`, {
                             headers: { 'Authorization': `Bearer ${this.token}` }
                         });
 
-                        if (response.ok) {
-                            const userData = await response.json();
-                            this.user = userData;
-                            if (this.isAdmin()) {
-                                this.activeTab = 'admin';
-                            }
-                            await this.loadTasks();
+                        this.user = Object.assign(createDefaultUser(), userData || {});
+                        this.isAuthenticated = Boolean(this.user?.id);
+
+                        if (this.isAdmin()) {
+                            this.activeTab = 'admin';
                         } else {
-                            this.logout();
-                            if (response.status === 401) {
-                                this.showNotification('Сессия истекла. Войдите снова.', 'error');
-                                this.authMode = 'login';
-                            }
+                            this.activeTab = 'tasks';
                         }
+                        await this.loadTasks();
                     } catch (error) {
                         console.error('Error loading user data:', error);
+                        if (error.status === 401) {
+                            this.showNotification('Сессия истекла. Войдите снова.', 'error');
+                            this.authMode = 'login';
+                        }
+                        this.logout(false);
+                        await this.loadTasks();
                     }
                 },
 
@@ -1124,7 +1145,7 @@
                         let baseTasks = { items: [], total: 0 };
 
                         if (this.isAdmin() && this.token) {
-                        try {
+                            try {
                                 baseTasks = await fetchJson(`${this.apiUrl}/admin/tasks`, {
                                     headers: { 'Authorization': `Bearer ${this.token}` }
                                 });
@@ -1148,7 +1169,7 @@
                         }
 
                         let assignedTasks = { items: [], total: 0 };
-                        if (this.token && this.user) {
+                        if (this.token && this.isAuthenticated) {
                             try {
                                 assignedTasks = await fetchJson(`${this.apiUrl}/tasks/assigned`, {
                                     headers: { 'Authorization': `Bearer ${this.token}` }
@@ -1324,7 +1345,9 @@
                 },
 
                 async purchaseItem(item) {
-                    if (this.user.coins < item.price) {
+                    const availableCoins = this.user?.coins ?? 0;
+
+                    if (availableCoins < item.price) {
                         this.showNotification('Недостаточно монет!', 'error');
                         return;
                     }
