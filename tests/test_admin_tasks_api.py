@@ -42,6 +42,7 @@ sys.modules.setdefault("openai", openai_stub)
 
 from app.main import app  # noqa: E402  # import after stubbing optional deps
 import app.main as app_main  # noqa: E402
+from app.routers import admin as admin_router  # noqa: E402
 from app.auth import require_admin
 from app.database import get_async_db
 from app.models import TaskStatus
@@ -231,6 +232,30 @@ def test_admin_tasks_endpoint_returns_sanitized_payload(client: TestClient) -> N
     assert task["success_rate"] == pytest.approx(92.0)
     assert task["avg_score"] == pytest.approx(88.75)
     assert task["created_at"] is not None
+
+
+def test_admin_task_collection_get_registered_before_options() -> None:
+    """Ensure GET /tasks is registered before OPTIONS fallbacks."""
+
+    tasks_routes = [
+        route for route in admin_router.router.routes if route.path == "/tasks"
+    ]
+    assert tasks_routes, "Expected admin /tasks routes to be registered"
+
+    first_methods = tasks_routes[0].methods or set()
+    assert "GET" in first_methods, tasks_routes[0]
+
+
+def test_http_exception_handler_preserves_allow_header(client: TestClient) -> None:
+    response = client.post("/api/admin/dashboard", headers={"Authorization": "Bearer token"})
+
+    assert response.status_code == 405
+    allow_header = response.headers.get("allow")
+    assert allow_header is not None
+    assert "GET" in allow_header
+
+    payload = response.json()
+    assert payload["error"]["message"].lower() == "method not allowed"
 
 
 def test_public_tasks_endpoint_uses_same_serializer(client: TestClient) -> None:

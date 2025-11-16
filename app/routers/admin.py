@@ -258,29 +258,6 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-    """Обрабатывать preflight-запросы для UI."""
-
-def _build_admin_preflight_response(request: Request) -> Response:
-    """Return a shared 204 response for admin task preflight requests."""
-    return Response(
-        status_code=status.HTTP_204_NO_CONTENT,
-        headers=_build_admin_task_cors_headers(request),
-    )
-@router.options("/tasks", include_in_schema=False)
-@router.options("/tasks/", include_in_schema=False)
-@router.options("/tasks/{path:path}", include_in_schema=False)
-async def admin_tasks_preflight(request: Request, path: Optional[str] = None) -> Response:
-    """Обрабатывать preflight-запросы для UI.
-
-    Browsers may preflight any nested admin task endpoint (e.g. ``/assign`` or
-    ``/42``) once the dashboard attaches the ``Authorization`` header.  Without
-    the catch-all route those OPTIONS requests returned ``405 Method Not
-    Allowed`` and the real request never reached the API.  Reusing the same
-    response builder keeps the behaviour consistent for the base collection and
-    every nested resource.
-    """
-
-    return _build_admin_preflight_response(request)
 
 
 @router.get("/tasks", response_model=TaskListResponse)
@@ -370,6 +347,31 @@ async def get_admin_tasks(
         })
         return Response(status_code=status.HTTP_200_OK, headers=head_headers)
     return TaskListResponse(items=serialized, total=total)
+
+
+def _build_admin_preflight_response(request: Request) -> Response:
+    """Return a shared 204 response for admin task preflight requests."""
+    return Response(
+        status_code=status.HTTP_204_NO_CONTENT,
+        headers=_build_admin_task_cors_headers(request),
+    )
+
+
+@router.options("/tasks", include_in_schema=False)
+@router.options("/tasks/", include_in_schema=False)
+@router.options("/tasks/{path:path}", include_in_schema=False)
+async def admin_tasks_preflight(request: Request, path: Optional[str] = None) -> Response:
+    """Обрабатывать preflight-запросы для UI.
+
+    Старые версии Starlette (и FastAPI до 0.110) прекращали поиск маршрутов
+    после первого частичного совпадения.  Если ``OPTIONS``-маршрут
+    регистрировался раньше ``GET``-обработчика, запросы ``GET`` могли получать
+    ``405 Method Not Allowed`` даже при наличии правильного обработчика.  Чтобы
+    не зависеть от внутреннего порядка, мы регистрируем ``GET``-маршрут выше,
+    но оставляем общий preflight обработчик для вложенных путей.
+    """
+
+    return _build_admin_preflight_response(request)
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
