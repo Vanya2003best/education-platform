@@ -878,14 +878,49 @@
     </div>
 
     <script>
+        const DEFAULT_API_BASE = '/api';
         const normalizeApiBase = (base) => {
             if (typeof base !== 'string') {
-                return '/api';
+                return DEFAULT_API_BASE;
             }
             const trimmed = base.trim();
-            return trimmed.replace(/\/+$/, '') || '/api';
+            return trimmed.replace(/\/+$/, '') || DEFAULT_API_BASE;
         };
-        const API_BASE = normalizeApiBase('/api');
+
+        const readInitialApiBase = () => {
+            let queryBase = '';
+            try {
+                const params = new URLSearchParams(window.location.search);
+                queryBase = params.get('apiBase') || params.get('api') || '';
+            } catch (error) {
+                console.warn('Unable to parse API base from query params', error);
+            }
+
+            const globalBase = typeof window !== 'undefined' && (window.API_BASE || window.__API_BASE__)
+                ? window.API_BASE || window.__API_BASE__
+                : '';
+            const storedBase = (() => {
+                try {
+                    return localStorage.getItem('api_base');
+                } catch {
+                    return '';
+                }
+            })();
+
+            const candidate = queryBase || globalBase || storedBase || DEFAULT_API_BASE;
+            const normalized = normalizeApiBase(candidate);
+
+            if (queryBase && normalized) {
+                try {
+                    localStorage.setItem('api_base', normalized);
+                } catch {
+                    // Ignore storage failures (e.g. private mode)
+                }
+            }
+
+            return normalized;
+        };
+        const API_BASE = readInitialApiBase();
         const ensureTrailingSlash = (url) => url.endsWith('/') ? url : `${url}/`;
         const resolveUrl = (url) => {
             try {
@@ -894,6 +929,38 @@
                 console.warn('Failed to resolve URL, returning as-is', { url, error });
                 return url;
             }
+        };
+        const normalizeTaskCollection = (payload, context = 'tasks') => {
+            if (!payload) {
+                return { items: [], total: 0 };
+            }
+
+            if (Array.isArray(payload)) {
+                return { items: payload, total: payload.length };
+            }
+
+            if (Array.isArray(payload.items)) {
+                const total = Number(payload.total);
+                return {
+                    items: payload.items,
+                    total: Number.isFinite(total) ? total : payload.items.length
+                };
+            }
+
+            if (Array.isArray(payload.data)) {
+                const total = Number(payload.total);
+                return {
+                    items: payload.data,
+                    total: Number.isFinite(total) ? total : payload.data.length
+                };
+            }
+
+            if (typeof payload === 'object') {
+                console.warn(`Unexpected ${context} payload shape`, payload);
+            }
+
+            const fallbackTotal = Number(payload?.total ?? 0);
+            return { items: [], total: Number.isFinite(fallbackTotal) ? fallbackTotal : 0 };
         };
 
         const createDefaultUser = () => ({
@@ -1194,11 +1261,11 @@
 
                 async loadTasks() {
                     try {
-                        let baseTasks = { items: [], total: 0 };
+                        let adminTasksPayload = null;
 
                         if (this.isAdmin() && this.token) {
                             try {
-                                baseTasks = await fetchJson(ensureTrailingSlash(`${this.apiUrl}/admin/tasks`), {
+                                adminTasksPayload = await fetchJson(ensureTrailingSlash(`${this.apiUrl}/admin/tasks`), {
                                     method: 'GET',
                                     headers: { 'Authorization': `Bearer ${this.token}` }
                                 });
@@ -1208,13 +1275,16 @@
                                     this.logout();
                                     return;
                                 }
-                                // console.error('Failed to load admin tasks:', error.payload || error);
+                                console.error('Failed to load admin tasks:', error.payload || error);
                             }
                         }
 
-                        if (!Array.isArray(baseTasks.items) || !baseTasks.items.length) {
+                        let baseTasks = normalizeTaskCollection(adminTasksPayload, 'admin tasks');
+
+                        if (!baseTasks.items.length) {
                             try {
-                                baseTasks = await fetchJson(`${this.apiUrl}/tasks`);
+                                const publicPayload = await fetchJson(`${this.apiUrl}/tasks`);
+                                baseTasks = normalizeTaskCollection(publicPayload, 'public tasks');
                             } catch (error) {
                                 console.error('Failed to load public tasks:', error.payload || error);
                                 baseTasks = { items: [], total: 0 };
@@ -1224,9 +1294,10 @@
                         let assignedTasks = { items: [], total: 0 };
                         if (this.token && this.isAuthenticated) {
                             try {
-                                assignedTasks = await fetchJson(`${this.apiUrl}/tasks/assigned`, {
+                                const assignedPayload = await fetchJson(`${this.apiUrl}/tasks/assigned`, {
                                     headers: { 'Authorization': `Bearer ${this.token}` }
                                 });
+                                assignedTasks = normalizeTaskCollection(assignedPayload, 'assigned tasks');
                             } catch (error) {
                                 if (error.status === 401 || error.status === 403) {
                                     this.showNotification('Авторизация истекла. Войдите снова.', 'error');

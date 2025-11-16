@@ -191,7 +191,7 @@ class TaskUpdate(BaseModel):
 
 class TaskResponse(TaskBase):
     id: int
-    status: str
+    status: str = Field(default="active")
     topic: Optional[str]
     tags: Optional[List[str]]
     min_level: int
@@ -210,8 +210,7 @@ class TaskResponse(TaskBase):
     avg_score: float
     created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(from_attributes=True)
 class TaskListResponse(BaseModel):
     """Унифицированный список заданий с общей статистикой."""
 

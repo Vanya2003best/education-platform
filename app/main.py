@@ -111,13 +111,25 @@ app = FastAPI(
 )
 
 # Middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.CORS_ORIGINS if settings.is_production else ["*"],
+cors_kwargs = dict(
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=["*"],
     allow_headers=["*"],
     expose_headers=["X-Total-Count", "X-Page", "X-Per-Page"],
+)
+
+effective_origins = settings.effective_cors_origins
+if effective_origins:
+    cors_kwargs["allow_origins"] = effective_origins
+elif settings.cors_allow_all and not effective_origins:
+    # '*' указан в настройках, но браузеры требуют конкретный origin, если шлём куки/токены
+    cors_kwargs["allow_origin_regex"] = r"https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$"
+else:
+    cors_kwargs["allow_origin_regex"] = r"https?://(localhost|127\\.0\\.0\\.1)(:\\d+)?$"
+
+app.add_middleware(
+    CORSMiddleware,
+    **cors_kwargs,
 )
 
 # Сжатие ответов

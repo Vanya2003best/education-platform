@@ -6,6 +6,23 @@ from typing import List, Optional
 import secrets
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+
+# Стандартный набор origin'ов, которые мы явно разрешаем для локальной разработки
+DEFAULT_CORS_ORIGINS = [
+    "http://localhost",
+    "https://localhost",
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://localhost:5500",
+    "http://localhost:8000",
+    "http://127.0.0.1",
+    "https://127.0.0.1",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:5500",
+    "http://127.0.0.1:8000",
+]
+
 class Settings(BaseSettings):
     """Настройки приложения из переменных окружения"""
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=True)
@@ -34,7 +51,7 @@ class Settings(BaseSettings):
     RATE_LIMIT_PERIOD: int = 60  # секунды
 
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://localhost:8000"]
+    CORS_ORIGINS: List[str] = DEFAULT_CORS_ORIGINS
     CORS_ALLOW_CREDENTIALS: bool = True
 
     # OpenAI (для AI проверки)
@@ -115,6 +132,24 @@ class Settings(BaseSettings):
     def is_development(self) -> bool:
         """Проверка development окружения"""
         return self.ENVIRONMENT == "development"
+
+    @property
+    def cors_allow_all(self) -> bool:
+        """Нужно ли разрешать все origin'ы (используется, если явно передан *)"""
+        return any(origin.strip() == "*" for origin in self.CORS_ORIGINS)
+
+    @property
+    def effective_cors_origins(self) -> List[str]:
+        """Вернуть список origin'ов без символа *, если он указан в настройках"""
+        origins = [origin.strip() for origin in self.CORS_ORIGINS if origin.strip()]
+
+        # Если ничего не настроено, используем безопасный дефолт
+        if not origins:
+            return DEFAULT_CORS_ORIGINS
+
+        # '*' обрабатываем отдельно, чтобы не нарушать требования браузеров
+        filtered = [origin for origin in origins if origin != "*"]
+        return filtered
 
 
 @lru_cache()
