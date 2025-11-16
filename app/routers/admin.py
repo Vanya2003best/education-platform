@@ -25,6 +25,41 @@ from app.utils.task_serializers import serialize_task, serialize_tasks
 from app.utils.task_filters import task_is_effectively_active
 router = APIRouter()
 ALLOW_ADMIN_TASK_METHODS = "GET, HEAD, OPTIONS, POST, PATCH, DELETE"
+
+def _build_admin_task_cors_headers(request: Request) -> dict[str, str]:
+    """Return CORS headers for admin task endpoints.
+
+    Browsers send a preflight request for the admin task UI because the
+    dashboard attaches an ``Authorization`` header.  Our API already has the
+    global ``CORSMiddleware`` enabled, but explicit ``OPTIONS`` routes bypass
+    its automatic response builder.  When that happened the browser never saw
+    the ``Access-Control-Allow-Origin`` header and blocked the real request.
+
+    To make the behaviour deterministic we synthesise the minimal header set
+    ourselves and mirror the requested Origin so that credentialed requests are
+    allowed.
+    """
+
+    requested_headers = request.headers.get(
+        "Access-Control-Request-Headers", "Authorization, Content-Type"
+    )
+    headers = {
+        "Allow": ALLOW_ADMIN_TASK_METHODS,
+        "Access-Control-Allow-Methods": ALLOW_ADMIN_TASK_METHODS,
+        "Access-Control-Allow-Headers": requested_headers,
+        "Access-Control-Expose-Headers": "X-Total-Count, X-Page, X-Per-Page",
+        "Access-Control-Max-Age": "600",
+    }
+
+    origin = request.headers.get("origin")
+    if origin:
+        headers["Access-Control-Allow-Origin"] = origin
+        headers["Access-Control-Allow-Credentials"] = "true"
+        headers["Vary"] = "Origin"
+    else:
+        headers["Access-Control-Allow-Origin"] = "*"
+
+    return headers
 @router.get("/dashboard", response_model=AdminDashboard)
 async def get_admin_dashboard(
         current_user: User = Depends(require_admin),
@@ -58,7 +93,7 @@ async def get_admin_dashboard(
     # Статистика контента
     total_tasks = await db.scalar(select(func.count(Task.id)))
     active_tasks = await db.scalar(
-        select(func.count(Task.id)).where(Task.is_active == True)
+        select(func.count(Task.id)).where(Task.status == TaskStatus.ACTIVE)
     )
 
     total_submissions = await db.scalar(select(func.count(Submission.id)))
@@ -227,16 +262,9 @@ async def grant_coins(
 @router.options("/tasks/", include_in_schema=False)
 async def admin_tasks_preflight(request: Request) -> Response:
     """Обрабатывать preflight-запросы для UI."""
-    requested_headers = request.headers.get(
-        "Access-Control-Request-Headers", "Authorization, Content-Type"
-    )
     return Response(
         status_code=status.HTTP_204_NO_CONTENT,
-        headers={
-            "Allow": ALLOW_ADMIN_TASK_METHODS,
-            "Access-Control-Allow-Methods": ALLOW_ADMIN_TASK_METHODS,
-            "Access-Control-Allow-Headers": requested_headers,
-        },
+        headers=_build_admin_task_cors_headers(request),
     )
 
 
@@ -312,10 +340,20 @@ async def get_admin_tasks(
         )
 
     response.headers.update(total_header)
-    response.headers.setdefault("Allow", ALLOW_ADMIN_TASK_METHODS)
+    cors_headers = _build_admin_task_cors_headers(request)
+    for key in ("Allow", "Access-Control-Expose-Headers"):
+        if key in cors_headers:
+            response.headers.setdefault(key, cors_headers[key])
 
     if request.method == "HEAD":
-        return Response(status_code=status.HTTP_200_OK, headers=total_header)
+        head_headers = dict(total_header)
+        head_headers.update({
+            "Allow": cors_headers.get("Allow", ALLOW_ADMIN_TASK_METHODS),
+            "Access-Control-Expose-Headers": cors_headers.get(
+                "Access-Control-Expose-Headers", "X-Total-Count"
+            ),
+        })
+        return Response(status_code=status.HTTP_200_OK, headers=head_headers)
     return TaskListResponse(items=serialized, total=total)
 
 
@@ -507,7 +545,7 @@ async def bulk_activate_tasks(
     await db.execute(
         update(Task)
         .where(Task.id.in_(task_ids))
-        .values(is_active=True)
+        .values(status=TaskStatus.ACTIVE)
     )
 
     await db.commit()
@@ -531,7 +569,7 @@ async def bulk_deactivate_tasks(
     await db.execute(
         update(Task)
         .where(Task.id.in_(task_ids))
-        .values(is_active=False)
+        .values(status=TaskStatus.ARCHIVED)
     )
 
     await db.commit()
