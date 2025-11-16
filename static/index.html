@@ -1095,7 +1095,11 @@
         }
 
         async function fetchJson(url, options = {}) {
-            const { _retryTrailingSlash = false, ...cleanOptions } = options;
+            const {
+                _retryAlternatePath = false,
+                _retryTrailingSlash = false,
+                ...cleanOptions
+            } = options;
             const method = (cleanOptions.method || 'GET').toUpperCase();
             const headers = {
                 Accept: 'application/json',
@@ -1549,7 +1553,8 @@
 
                         if (isAdminUser && this.token) {
                             try {
-                                adminTasksPayload = await fetchJson(ensureTrailingSlash(`${this.apiUrl}/admin/tasks`), {
+                                const adminTasksUrl = `${this.apiUrl}/admin/tasks`;
+                                adminTasksPayload = await fetchJson(adminTasksUrl, {
                                     method: 'GET',
                                     headers: { 'Authorization': `Bearer ${this.token}` }
                                 });

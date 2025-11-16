@@ -246,6 +246,21 @@ def test_public_tasks_endpoint_uses_same_serializer(client: TestClient) -> None:
     assert data[0]["subject"] == serialized.subject
     assert data[0]["status"] == serialized.status
 
+def test_admin_tasks_nested_preflight_handles_subpaths(client: TestClient) -> None:
+    response = client.options(
+        "/api/admin/tasks/42/assign",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "PATCH",
+            "Access-Control-Request-Headers": "authorization, content-type",
+        },
+    )
+
+    assert response.status_code in (200, 204)
+    headers = {k.lower(): v for k, v in response.headers.items()}
+    allow_methods = headers.get("access-control-allow-methods", "").lower()
+    assert "patch" in allow_methods
+
     def test_admin_tasks_preflight_options_request(client: TestClient) -> None:
         response = client.options(
             "/api/admin/tasks",
