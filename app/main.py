@@ -200,6 +200,8 @@ if settings.PROMETHEUS_ENABLED:
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Обработчик HTTP исключений"""
+
+    headers = exc.headers or None
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -210,7 +212,8 @@ async def http_exception_handler(request: Request, exc: StarletteHTTPException):
                 "method": request.method,
                 "timestamp": time.time()
             }
-        }
+        },
+        headers=headers,
     )
 def _stringify_exceptions(value):
     """Рекурсивно преобразует исключения в сериализуемые значения."""
