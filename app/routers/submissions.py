@@ -11,10 +11,15 @@ from datetime import datetime
 import json
 
 from app.database import get_async_db
-from app.models import Submission, Task, User, Transaction, SubmissionStatus
+from app.models import Submission, Task, User, Transaction, SubmissionStatus, TaskAssignment
 from app.services.ai_checker import ai_checker
 from app.auth import get_current_user
-from app.schemas import SubmissionResponse, SubmissionDetail
+from app.schemas import (
+    SubmissionResponse,
+    SubmissionDetail,
+    HtmlSubmissionRequest,
+    HtmlSubmissionResponse,
+)
 
 router = APIRouter()
 
@@ -99,6 +104,119 @@ async def submit_photo_task(
         "status": "processing",
         "message": "Фото загружено, началась проверка. Результаты появятся через 10-30 секунд"
     }
+
+
+@router.post("/html-result", response_model=HtmlSubmissionResponse)
+async def submit_html_result(
+        payload: HtmlSubmissionRequest,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_async_db)
+):
+    """Принять результат задания, выполненного в HTML-интерфейсе."""
+
+    task_result = await db.execute(select(Task).where(Task.id == payload.task_id))
+    task = task_result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=404, detail="Задание не найдено")
+
+    task_status = task.status.value if hasattr(task.status, "value") else task.status
+    if task_status != "active":
+        raise HTTPException(status_code=400, detail="Задание неактивно")
+
+    if task.min_level and current_user.level < task.min_level:
+        raise HTTPException(status_code=403, detail="Недостаточный уровень для выполнения задания")
+
+    existing_submission_result = await db.execute(
+        select(Submission).where(
+            Submission.user_id == current_user.id,
+            Submission.task_id == task.id
+        )
+    )
+    if existing_submission_result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Результат по этому заданию уже сохранен")
+
+    normalized_score = float(payload.score)
+    if payload.max_score and payload.max_score > 0:
+        normalized_score = (payload.score / payload.max_score) * 100
+    normalized_score = max(0.0, min(100.0, normalized_score))
+
+    coins_earned = calculate_coins(normalized_score, task.reward_coins)
+    exp_earned = calculate_exp(normalized_score, task.reward_exp)
+
+    now = datetime.utcnow()
+    submission = Submission(
+        user_id=current_user.id,
+        task_id=task.id,
+        status=SubmissionStatus.CHECKED,
+        score=normalized_score,
+        ai_feedback=payload.result_text or f"Результат HTML-задания сохранен ({normalized_score:.0f}/100)",
+        detailed_analysis=payload.details,
+        completion_time=payload.time_spent,
+        submitted_at=now,
+        checked_at=now,
+        coins_earned=coins_earned,
+        exp_earned=exp_earned
+    )
+    db.add(submission)
+
+    current_user.coins += coins_earned
+    current_user.experience += exp_earned
+    current_user.tasks_completed = (current_user.tasks_completed or 0) + 1
+
+    scores_result = await db.execute(
+        select(Submission.score).where(
+            Submission.user_id == current_user.id,
+            Submission.status == SubmissionStatus.CHECKED
+        )
+    )
+    score_values = [row[0] for row in scores_result.all() if row[0] is not None]
+    if score_values:
+        current_user.average_score = sum(score_values) / len(score_values)
+        current_user.best_score = max(score_values)
+
+    previous_level = current_user.level
+    new_level = calculate_level(current_user.experience)
+    if new_level > current_user.level:
+        current_user.level = new_level
+        current_user.coins += 50  # бонус за новый уровень
+
+    assignment_result = await db.execute(
+        select(TaskAssignment).where(
+            TaskAssignment.task_id == task.id,
+            TaskAssignment.user_id == current_user.id
+        )
+    )
+    assignment = assignment_result.scalar_one_or_none()
+    if assignment:
+        assignment.is_completed = True
+        assignment.completed_at = datetime.utcnow()
+
+    transaction = Transaction(
+        user_id=current_user.id,
+        coins_amount=coins_earned,
+        exp_amount=exp_earned,
+        transaction_type="task_reward",
+        category="reward",
+        description=f"Награда за HTML-задание: {task.title}",
+        coins_balance=current_user.coins
+    )
+    db.add(transaction)
+
+    await db.flush()
+    await db.commit()
+    await db.refresh(submission)
+
+    level_message = " Уровень повышен!" if current_user.level > previous_level else ""
+    return HtmlSubmissionResponse(
+        submission_id=submission.id,
+        coins_earned=coins_earned,
+        exp_earned=exp_earned,
+        new_level=current_user.level,
+        total_coins=current_user.coins,
+        message=f"Результат сохранен.{level_message}"
+    )
+
 
 
 async def process_submission(submission_id: int, file_path: str, task: Task):

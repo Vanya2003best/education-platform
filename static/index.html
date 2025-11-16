@@ -92,39 +92,6 @@
             100% { background-position: 200% 0; }
         }
 
-        .task-html-content h1,
-        .task-html-content h2,
-        .task-html-content h3 {
-            font-weight: 600;
-            margin-top: 1rem;
-            margin-bottom: 0.5rem;
-        }
-
-        .task-html-content p {
-            margin-bottom: 0.75rem;
-        }
-
-        .task-html-content ul,
-        .task-html-content ol {
-            margin-left: 1.25rem;
-            margin-bottom: 0.75rem;
-        }
-
-        .task-html-content pre {
-            background-color: #111827;
-            color: #f9fafb;
-            padding: 1rem;
-            border-radius: 0.75rem;
-            overflow-x: auto;
-            margin-bottom: 1rem;
-        }
-
-        .task-html-content code {
-            background-color: #f3f4f6;
-            padding: 0.2rem 0.4rem;
-            border-radius: 0.25rem;
-            font-family: Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-        }
     </style>
 </head>
 <body class="bg-gray-50" x-data="app()" x-init="init()">
@@ -833,9 +800,12 @@
                 <div class="mb-6 space-y-6">
                     <p class="text-gray-700 whitespace-pre-wrap" x-text="selectedTask?.description"></p>
                     <div x-show="selectedTask?.content_html">
-                        <h3 class="text-lg font-semibold text-gray-800 mb-3">HTML контент задания</h3>
-                        <div class="task-html-content border border-purple-100 bg-purple-50 rounded-xl p-4 max-h-96 overflow-y-auto shadow-inner"
-                             x-html="selectedTask?.content_html"></div>
+                        <button type="button"
+                                @click="openTaskHtmlInNewTab()"
+                                class="w-full flex items-center justify-center gap-2 px-4 py-3 text-base font-semibold rounded-xl bg-purple-600 text-white hover:bg-purple-700 transition">
+                            <i class="fas fa-external-link-alt"></i>
+                            Перейти к решению задачи
+                        </button>
                     </div>
                 </div>
 
@@ -1066,9 +1036,13 @@
                 // UI
                 activeTab: 'tasks',
                 selectedTask: null,
+                taskHtmlExpanded: false,
                 selectedFile: null,
                 previewUrl: null,
                 submitting: false,
+                htmlResultProcessing: false,
+                htmlResultListenerBound: false,
+                htmlResultHandler: null,
 
                 // Данные
                 tasks: [],
@@ -1110,10 +1084,142 @@
 
                 // Инициализация
                 async init() {
+                    this.setupHtmlResultListener();
                     if (this.token) {
                         await this.loadUserData();
                     } else {
                         await this.loadTasks();
+                    }
+                },
+                setupHtmlResultListener() {
+                    if (this.htmlResultListenerBound) {
+                        return;
+                    }
+
+                    const handler = (event) => {
+                        if (!event || typeof event.data !== 'object') {
+                            return;
+                        }
+
+                        const sameOrigin = !event.origin || event.origin === 'null' || event.origin === window.location.origin;
+                        if (!sameOrigin) {
+                            return;
+                        }
+
+                        const type = event.data?.type || event.data?.eventType;
+                        const source = event.data?.source || event.data?.origin;
+                        const payload = event.data?.payload || event.data?.result || event.data;
+                        const hasKnownSignature = type === 'html_task_result' || source === 'edu-platform-html-task';
+                        const hasTaskId = Boolean(payload && (payload.taskId !== undefined || payload.task_id !== undefined));
+
+                        if (!hasKnownSignature && !hasTaskId) {
+                            return;
+                        }
+
+                        if (payload) {
+                            this.handleHtmlTaskResult(payload);
+                        }
+                    };
+
+                    window.addEventListener('message', handler);
+                    this.htmlResultHandler = handler;
+                    this.htmlResultListenerBound = true;
+                },
+
+                async handleHtmlTaskResult(rawPayload) {
+                    const payload = rawPayload || {};
+                    const taskIdValue = payload.taskId ?? payload.task_id;
+                    const taskId = Number(taskIdValue);
+
+                    if (!Number.isFinite(taskId)) {
+                        this.showNotification('Не удалось определить задание для зачета HTML-результата', 'error');
+                        return;
+                    }
+
+                    if (!this.token) {
+                        this.showNotification('Войдите, чтобы зачесть результат задания', 'error');
+                        return;
+                    }
+
+                    if (this.htmlResultProcessing) {
+                        return;
+                    }
+
+                    const safeClone = (value) => {
+                        if (!value || typeof value !== 'object') {
+                            return undefined;
+                        }
+                        try {
+                            return JSON.parse(JSON.stringify(value));
+                        } catch (error) {
+                            console.warn('Failed to clone HTML task details', error);
+                            return undefined;
+                        }
+                    };
+
+                    const scoreCandidate = Number(payload.score ?? payload.points ?? payload.result ?? 0);
+                    const scoreValue = Number.isFinite(scoreCandidate) ? scoreCandidate : 0;
+
+                    const rawMaxScore = Number(payload.maxScore ?? payload.max_score ?? payload.total ?? payload.totalPoints);
+                    const maxScoreValue = Number.isFinite(rawMaxScore) && rawMaxScore > 0 ? rawMaxScore : null;
+
+                    const rawTime = Number(payload.timeSpent ?? payload.time_spent ?? payload.duration ?? payload.elapsedSeconds);
+                    const timeSpent = Number.isFinite(rawTime) && rawTime >= 0 ? Math.round(rawTime) : null;
+
+                    const detailsPayload = {};
+                    [
+                        ['details', 'details'],
+                        ['answers', 'answers'],
+                        ['meta', 'meta'],
+                        ['breakdown', 'breakdown'],
+                        ['stats', 'stats']
+                    ].forEach(([key, target]) => {
+                        const cloned = safeClone(payload[key]);
+                        if (cloned !== undefined) {
+                            detailsPayload[target] = cloned;
+                        }
+                    });
+
+                    const detailsToSend = Object.keys(detailsPayload).length ? detailsPayload : null;
+                    const resultText = payload.summary || payload.message || payload.resultText || payload.feedback || null;
+
+                    this.htmlResultProcessing = true;
+
+                    try {
+                        const response = await fetch(`${this.apiUrl}/submissions/html-result`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': `Bearer ${this.token}`,
+                                'Content-Type': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                task_id: taskId,
+                                score: scoreValue,
+                                max_score: maxScoreValue,
+                                time_spent: timeSpent,
+                                result_text: resultText,
+                                details: detailsToSend
+                            })
+                        });
+
+                        const data = await parseJsonSafe(response);
+
+                        if (response.ok) {
+                            const coins = Number(data?.coins_earned ?? 0);
+                            const exp = Number(data?.exp_earned ?? 0);
+                            const message = data?.message || 'Результат сохранен';
+                            this.showNotification(`${message} (+${coins} монет, +${exp} XP)`, 'success');
+                            await this.loadUserData();
+                            await this.loadSubmissions();
+                        } else {
+                            const errorMessage = data?.detail || data?.message || 'Не удалось сохранить результат HTML-задания';
+                            this.showNotification(errorMessage, 'error');
+                        }
+                    } catch (error) {
+                        console.error('Error saving HTML task result:', error);
+                        this.showNotification('Ошибка при сохранении результата HTML-задания', 'error');
+                    } finally {
+                        this.htmlResultProcessing = false;
                     }
                 },
 
@@ -1384,8 +1490,23 @@
                 // Работа с заданиями
                 selectTask(task) {
                     this.selectedTask = { ...task };
+                    this.taskHtmlExpanded = false;
                     this.selectedFile = null;
                     this.previewUrl = null;
+                },
+
+                openTaskHtmlInNewTab() {
+                    const content = this.selectedTask?.content_html;
+                    if (!content) return;
+
+                    const rawTitle = this.selectedTask?.title || 'Задание';
+                    const title = rawTitle.replace(/[<>]/g, '');
+                    const htmlDocument = `<!DOCTYPE html><html lang="ru"><head><meta charset="UTF-8"><title>${title}</title></head><body>${content}</body></html>`;
+
+                    const blob = new Blob([htmlDocument], { type: 'text/html;charset=utf-8' });
+                    const url = URL.createObjectURL(blob);
+                    window.open(url, '_blank', 'noopener');
+                    setTimeout(() => URL.revokeObjectURL(url), 60000);
                 },
 
                 handleFileSelect(event) {

@@ -255,6 +255,27 @@ class SubmissionDetail(SubmissionResponse):
     teacher_feedback: Optional[str]
     reviewed_at: Optional[datetime]
 
+class HtmlSubmissionRequest(BaseModel):
+    """Результат выполнения задания в HTML-формате."""
+
+    task_id: int
+    score: float = Field(..., ge=0)
+    max_score: Optional[float] = Field(None, gt=0)
+    time_spent: Optional[int] = Field(None, ge=0)
+    result_text: Optional[str] = Field(None, max_length=2000)
+    details: Optional[Dict[str, Any]] = None
+
+
+class HtmlSubmissionResponse(BaseModel):
+    """Ответ после фиксации результата HTML-задания."""
+
+    submission_id: int
+    coins_earned: int
+    exp_earned: int
+    new_level: int
+    total_coins: int
+    message: str
+
 
 # ===== SHOP SCHEMAS =====
 
