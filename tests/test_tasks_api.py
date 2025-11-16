@@ -150,7 +150,7 @@ async def test_public_task_list_returns_items(async_client, seeded_users):
     payload = response.json()
     assert payload["total"] == 2
     assert all("id" in item for item in payload["items"])
-
+    assert all(item["status"] == "active" for item in payload["items"])
 
 @pytest.mark.anyio
 async def test_admin_task_listing_requires_admin(async_client, seeded_users):

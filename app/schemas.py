@@ -191,6 +191,7 @@ class TaskUpdate(BaseModel):
 
 class TaskResponse(TaskBase):
     id: int
+    status: str
     topic: Optional[str]
     tags: Optional[List[str]]
     min_level: int

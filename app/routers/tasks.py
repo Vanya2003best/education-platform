@@ -9,6 +9,7 @@ from app.database import get_async_db
 from app.models import Task, User, TaskStatus, TaskAssignment
 from app.schemas import TaskCreate, TaskResponse, TaskListResponse
 from app.utils.task_serializers import serialize_task, serialize_tasks, build_task_list
+from app.utils.task_filters import task_is_effectively_active
 from app.auth import get_current_user
 
 router = APIRouter()
@@ -28,7 +29,7 @@ async def get_tasks(
     """
     Получить список заданий с фильтрами
     """
-    filters = [Task.status == TaskStatus.ACTIVE]
+    filters = [task_is_effectively_active()]
 
     # Фильтры
     if subject:
@@ -102,7 +103,7 @@ async def get_assigned_tasks(
         .join(TaskAssignment, TaskAssignment.task_id == Task.id)
         .where(
             TaskAssignment.user_id == current_user.id,
-            Task.status == TaskStatus.ACTIVE
+            task_is_effectively_active(),
         )
         .order_by(TaskAssignment.assigned_at.desc())
     )
@@ -139,7 +140,7 @@ async def get_subjects(db: AsyncSession = Depends(get_async_db)):
         select(Task.subject)
         .where(
             Task.subject.isnot(None),
-            Task.status == TaskStatus.ACTIVE
+            task_is_effectively_active(),
         )
         .distinct()
     )
@@ -155,7 +156,7 @@ async def get_task_types(db: AsyncSession = Depends(get_async_db)):
     """
     result = await db.execute(
         select(Task.task_type)
-        .where(Task.status == TaskStatus.ACTIVE)
+        .where(task_is_effectively_active())
         .distinct()
     )
     types = [row[0] for row in result.all()]

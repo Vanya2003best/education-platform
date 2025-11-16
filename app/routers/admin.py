@@ -21,6 +21,7 @@ from app.schemas import (
 from app.auth import require_admin
 from app.utils.cache import cache_manager
 from app.utils.task_serializers import serialize_task, serialize_tasks
+from app.utils.task_filters import task_is_effectively_active
 router = APIRouter()
 ALLOW_ADMIN_TASK_METHODS = "GET, HEAD, OPTIONS, POST"
 @router.get("/dashboard", response_model=AdminDashboard)
@@ -257,7 +258,7 @@ async def get_admin_tasks(
     filters = []
 
     if not include_inactive:
-        filters.append(Task.status == TaskStatus.ACTIVE)
+        filters.append(task_is_effectively_active())
 
     if subject:
         filters.append(Task.subject == subject)

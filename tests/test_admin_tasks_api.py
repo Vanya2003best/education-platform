@@ -227,6 +227,7 @@ def test_public_tasks_endpoint_uses_same_serializer(client: TestClient) -> None:
     serialized = serialize_task(DummyTask())
     assert data[0]["task_type"] == serialized.task_type
     assert data[0]["subject"] == serialized.subject
+    assert data[0]["status"] == serialized.status
 
     def test_admin_tasks_preflight_options_request(client: TestClient) -> None:
         response = client.options(

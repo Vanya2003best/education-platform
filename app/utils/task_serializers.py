@@ -5,7 +5,7 @@ import json
 from datetime import datetime
 from typing import Iterable, List, Sequence
 
-from app.models import Task
+from app.models import Task, TaskStatus
 from app.schemas import TaskResponse, TaskListResponse
 from pydantic import ValidationError
 
@@ -68,6 +68,27 @@ def _normalize_task_type(value: object) -> str:
         normalized = normalized[:50].rstrip() or "general"
 
     return normalized
+
+def _normalize_task_status(value: object) -> str:
+    """Return a lower-cased task status compatible with legacy payloads."""
+
+    allowed_statuses = {status.value for status in TaskStatus}
+
+    if isinstance(value, TaskStatus):
+        candidate = value.value
+    elif isinstance(value, str):
+        candidate = value.strip()
+    elif value is None:
+        candidate = ""
+    else:
+        candidate = str(value).strip()
+
+    normalized = candidate.lower()
+    if normalized in allowed_statuses:
+        return normalized
+
+    # Fallback to the most permissive status so existing active tasks remain visible.
+    return TaskStatus.ACTIVE.value
 
 
 def _normalize_tags(tags: object) -> list[str]:
@@ -187,6 +208,7 @@ def serialize_task(task: Task) -> TaskResponse:
         "title": title,
         "description": description,
         "task_type": task_type,
+        "status": _normalize_task_status(getattr(task, "status", None)),
         "subject": subject,
         "difficulty": difficulty,
         "content_html": None if getattr(task, "content_html", None) is None else str(getattr(task, "content_html")),
