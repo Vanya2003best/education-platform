@@ -97,12 +97,24 @@ class DummyResult:
     def all(self) -> list[Any]:
         return self._tasks
 
+    def scalar_one_or_none(self) -> Any | None:
+        if not self._tasks:
+            return None
+        if len(self._tasks) == 1:
+            return self._tasks[0]
+        raise RuntimeError("DummyResult.scalar_one_or_none only supports up to one task")
 
 class DummySession:
     def __init__(self, tasks: list[DummyTask]) -> None:
         self._tasks: list[Any] = list(tasks)
         existing_ids = [getattr(task, "id", 0) for task in self._tasks]
         self._next_id = (max(existing_ids) if existing_ids else 0) + 1
+
+    def _find_task(self, task_id: int) -> Any | None:
+        for task in self._tasks:
+            if getattr(task, "id", None) == task_id:
+                return task
+        return None
 
     async def execute(self, *args: Any, **kwargs: Any) -> DummyResult:
         return DummyResult(self._tasks)
@@ -116,6 +128,9 @@ class DummySession:
     def add_all(self, objects: list[Any]) -> None:  # pragma: no cover - compatibility
         for obj in objects:
             self.add(obj)
+
+    async def delete(self, obj: Any) -> None:
+        self._tasks = [task for task in self._tasks if task is not obj]
 
     async def commit(self) -> None:  # pragma: no cover - API compatibility
         return None
@@ -151,8 +166,10 @@ class DummySession:
 
 @pytest.fixture
 def client() -> Iterator[TestClient]:
+    session = DummySession([DummyTask()])
+
     async def override_db() -> AsyncIterator[DummySession]:
-        yield DummySession([DummyTask()])
+        yield session
 
     def override_admin() -> Any:
         return types.SimpleNamespace(id=1, role="admin")
@@ -240,8 +257,9 @@ def test_public_tasks_endpoint_uses_same_serializer(client: TestClient) -> None:
         )
         assert response.status_code in (200, 204)
         headers = {k.lower(): v for k, v in response.headers.items()}
-        allow_methods = headers.get("access-control-allow-methods", "")
-        assert "post" in allow_methods.lower(), allow_methods
+        allow_methods = headers.get("access-control-allow-methods", "").lower()
+        for method in ("post", "patch", "delete"):
+            assert method in allow_methods, allow_methods
 
     def test_create_admin_task_accepts_complete_payload(client: TestClient) -> None:
         payload = {
@@ -271,3 +289,45 @@ def test_public_tasks_endpoint_uses_same_serializer(client: TestClient) -> None:
         assert data["content_html"] == payload["content_html"]
         assert data["difficulty"] == payload["difficulty"]
         assert data["reward_coins"] == payload["reward_coins"]
+
+    def test_admin_can_update_existing_task(client: TestClient) -> None:
+        payload = {
+            "title": "Обновлённый заголовок",
+            "difficulty": 3,
+            "reward_exp": 555,
+        }
+
+        response = client.patch(
+            "/api/admin/tasks/42",
+            headers={"Authorization": "Bearer token"},
+            json=payload,
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["title"] == payload["title"]
+        assert data["difficulty"] == payload["difficulty"]
+        assert data["reward_exp"] == payload["reward_exp"]
+
+    def test_admin_update_without_payload_returns_error(client: TestClient) -> None:
+        response = client.patch(
+            "/api/admin/tasks/42",
+            headers={"Authorization": "Bearer token"},
+            json={},
+        )
+
+        assert response.status_code == 400
+
+    def test_admin_can_delete_task(client: TestClient) -> None:
+        response = client.delete(
+            "/api/admin/tasks/42",
+            headers={"Authorization": "Bearer token"},
+        )
+
+        assert response.status_code == 200
+        assert response.json()["task_id"] == 42
+        second_response = client.delete(
+            "/api/admin/tasks/42",
+            headers={"Authorization": "Bearer token"},
+        )
+        assert second_response.status_code == 404

@@ -16,14 +16,15 @@ from app.models import (
 )
 from app.schemas import (
     AdminDashboard, BroadcastMessage, AdminTaskCreate,
-    TaskResponse, TaskAssignmentRequest, AdminUserSummary, TaskListResponse
+    TaskResponse, TaskAssignmentRequest, AdminUserSummary, TaskListResponse,
+    TaskUpdate,
 )
 from app.auth import require_admin
 from app.utils.cache import cache_manager
 from app.utils.task_serializers import serialize_task, serialize_tasks
 from app.utils.task_filters import task_is_effectively_active
 router = APIRouter()
-ALLOW_ADMIN_TASK_METHODS = "GET, HEAD, OPTIONS, POST"
+ALLOW_ADMIN_TASK_METHODS = "GET, HEAD, OPTIONS, POST, PATCH, DELETE"
 @router.get("/dashboard", response_model=AdminDashboard)
 async def get_admin_dashboard(
         current_user: User = Depends(require_admin),
@@ -378,6 +379,64 @@ async def create_task(
     await cache_manager.invalidate_pattern("tasks:*")
 
     return serialize_task(new_task)
+
+
+@router.patch("/tasks/{task_id}", response_model=TaskResponse)
+async def update_task(
+        task_id: int,
+        task_data: TaskUpdate,
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db),
+):
+    """Обновить существующее задание."""
+
+    update_payload = task_data.model_dump(exclude_unset=True)
+    if not update_payload:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Нет данных для обновления",
+        )
+
+    result = await db.execute(select(Task).where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задание не найдено")
+
+    for field_name, value in update_payload.items():
+        setattr(task, field_name, value)
+
+    await db.commit()
+    await db.refresh(task)
+
+    await cache_manager.invalidate_pattern("tasks:*")
+
+    return serialize_task(task)
+
+
+@router.delete("/tasks/{task_id}")
+async def delete_task(
+        task_id: int,
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db),
+):
+    """Удалить задание и связанные назначения."""
+
+    result = await db.execute(select(Task).where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+
+    if not task:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задание не найдено")
+
+    await db.delete(task)
+    await db.commit()
+
+    await cache_manager.invalidate_pattern("tasks:*")
+
+    return {
+        "message": "Задание удалено",
+        "task_id": task_id,
+    }
 
 
 @router.post("/tasks/{task_id}/assign")
