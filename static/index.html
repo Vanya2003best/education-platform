@@ -782,6 +782,27 @@
                                     <span x-text="adminTasksLoading ? 'Обновляем...' : 'Обновить список'"></span>
                                 </button>
                             </div>
+                            <div class="flex flex-wrap gap-4 mb-6">
+                                <select @change="filterAdminTasks()" x-model="adminFilters.subject"
+                                        class="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                                    <option value="">Все предметы</option>
+                                    <option value="Математика">Математика</option>
+                                    <option value="Физика">Физика</option>
+                                    <option value="Литература">Литература</option>
+                                    <option value="Химия">Химия</option>
+                                </select>
+
+                                <select @change="filterAdminTasks()" x-model="adminFilters.difficulty"
+                                        class="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500">
+                                    <option value="">Любая сложность</option>
+                                    <option value="1">⭐ Легко</option>
+                                    <option value="2">⭐⭐ Средне</option>
+                                    <option value="3">⭐⭐⭐ Сложно</option>
+                                    <option value="4">⭐⭐⭐⭐ Очень сложно</option>
+                                    <option value="5">⭐⭐⭐⭐⭐ Эксперт</option>
+                                </select>
+                            </div>
+
                             <p x-show="adminTasksError" class="text-sm text-red-500 mb-4" x-text="adminTasksError"></p>
                             <div x-show="adminTasksLoading" class="flex items-center justify-center text-gray-500 py-6">
                                 <i class="fas fa-spinner fa-spin mr-2"></i>
@@ -790,59 +811,65 @@
                             <div x-show="!adminTasksLoading && !adminTasks.length" class="text-sm text-gray-500">
                                 Пока нет созданных заданий. Добавьте новое задание выше, чтобы управлять им здесь.
                             </div>
-                            <div x-show="!adminTasksLoading && adminTasks.length" class="overflow-x-auto">
-                                <table class="min-w-full divide-y divide-gray-200 text-sm">
-                                    <thead class="bg-purple-50 text-gray-600 uppercase text-xs tracking-wide">
-                                        <tr>
-                                            <th class="px-4 py-3 text-left font-semibold">Задание</th>
-                                            <th class="px-4 py-3 text-center font-semibold">Сложность</th>
-                                            <th class="px-4 py-3 text-center font-semibold">Награды</th>
-                                            <th class="px-4 py-3 text-right font-semibold">Действия</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody class="divide-y divide-gray-100">
-                                        <template x-for="task in adminTasks" :key="`admin-task-${task.id}`">
-                                            <tr class="hover:bg-purple-50/40">
-                                                <td class="px-4 py-3">
-                                                    <p class="font-semibold text-gray-800" x-text="task.title"></p>
-                                                    <p class="text-xs text-gray-500" x-text="task.subject || 'Общий раздел'"></p>
-                                                </td>
-                                                <td class="px-4 py-3 text-center">
-                                                    <span class="inline-flex items-center justify-center px-2 py-1 text-xs font-semibold rounded-full bg-purple-100 text-purple-700">
-                                                        <i class="fas fa-signal mr-1"></i>
-                                                        <span x-text="'Ур. ' + task.difficulty"></span>
+                            <div x-show="!adminTasksLoading && adminTasks.length" class="space-y-4">
+                                <p class="text-sm text-gray-500" x-show="adminFilteredTasks.length === 0">
+                                    Нет заданий, подходящих под выбранные фильтры.
+                                </p>
+                                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                    <template x-for="task in adminFilteredTasks" :key="`admin-task-${task.id}`">
+                                        <div class="bg-gray-50 rounded-xl p-6 card-hover border border-purple-100">
+                                            <div class="flex justify-between items-start mb-3">
+                                                <div>
+                                                    <span class="inline-block px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-semibold"
+                                                          x-text="task.subject || 'Общий раздел'"></span>
+                                                    <p class="text-lg font-bold mt-3 text-gray-900" x-text="task.title"></p>
+                                                </div>
+                                                <span class="inline-flex items-center justify-center px-3 py-1 rounded-full bg-white border border-purple-200 text-sm font-semibold text-purple-700">
+                                                    <i class="fas fa-signal mr-1"></i>
+                                                    <span x-text="'Ур. ' + task.difficulty"></span>
+                                                </span>
+                                            </div>
+                                            <p class="text-gray-600 text-sm mb-4 line-clamp-3" x-text="task.description"></p>
+                                            <div class="flex items-center justify-between mb-4 text-sm">
+                                                <div class="flex gap-4">
+                                                    <span class="flex items-center gap-1 text-yellow-600 font-semibold">
+                                                        <i class="fas fa-coins"></i>
+                                                        <span x-text="task.reward_coins"></span>
                                                     </span>
-                                                </td>
-                                                <td class="px-4 py-3 text-center">
-                                                    <div class="flex flex-col items-center leading-tight">
-                                                        <span class="text-sm font-semibold text-yellow-600" x-text="task.reward_coins + ' монет'"></span>
-                                                        <span class="text-xs text-purple-600" x-text="task.reward_exp + ' XP'"></span>
-                                                    </div>
-                                                </td>
-                                                <td class="px-4 py-3 text-right space-y-2 md:space-y-0 md:space-x-2 md:flex md:justify-end">
-                                                    <button type="button"
-                                                            @click="startAdminEdit(task)"
-                                                            class="inline-flex items-center px-3 py-2 bg-white border border-purple-200 rounded-lg text-purple-600 font-semibold hover:bg-purple-50 transition">
-                                                        <i class="fas fa-pen mr-2"></i> Редактировать
-                                                    </button>
-                                                    <button type="button"
-                                                            @click="deleteAdminTask(task.id)"
-                                                            :disabled="adminDeletingTaskId === task.id"
-                                                            class="inline-flex items-center px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-600 font-semibold hover:bg-red-100 transition disabled:opacity-60 disabled:cursor-not-allowed">
-                                                        <span x-show="adminDeletingTaskId !== task.id">
-                                                            <i class="fas fa-trash mr-2"></i> Удалить
-                                                        </span>
-                                                        <span x-show="adminDeletingTaskId === task.id">
-                                                            <i class="fas fa-spinner fa-spin mr-2"></i> Удаляем...
-                                                        </span>
-                                                    </button>
-                                                </td>
-                                            </tr>
-                                        </template>
-                                    </tbody>
-                                </table>
+                                                <span class="flex items-center gap-1 text-purple-600 font-semibold">
+                                                        <i class="fas fa-star"></i>
+                                                        <span x-text="task.reward_exp + ' XP'"></span>
+                                                    </span>
+                                                </div>
+                                                <span class="text-xs text-gray-500" x-show="task.updated_at">
+                                                    Обновлено: <span x-text="formatDate(task.updated_at)"></span>
+                                                </span>
+                                            </div>
+                                            <div class="flex flex-wrap gap-2">
+                                                <button type="button"
+                                                        @click="startAdminEdit(task)"
+                                                        class="flex-1 inline-flex items-center justify-center px-3 py-2 bg-white border border-purple-200 rounded-lg text-purple-600 font-semibold hover:bg-purple-50 transition">
+                                                    <i class="fas fa-pen mr-2"></i> Редактировать
+                                                </button>
+                                                <button type="button"
+                                                        @click="deleteAdminTask(task.id)"
+                                                        :disabled="adminDeletingTaskId === task.id"
+                                                        class="flex-1 inline-flex items-center justify-center px-3 py-2 bg-red-50 border border-red-200 rounded-lg text-red-600 font-semibold hover:bg-red-100 transition disabled:opacity-60 disabled:cursor-not-allowed">
+                                                    <span x-show="adminDeletingTaskId !== task.id">
+                                                        <i class="fas fa-trash mr-2"></i> Удалить
+                                                    </span>
+                                                    <span x-show="adminDeletingTaskId === task.id">
+                                                        <i class="fas fa-spinner fa-spin mr-2"></i> Удаляем...
+                                                    </span>
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
                             </div>
                         </div>
+                    </div>
+                </div>
 
                         <div x-show="adminEditTaskId" x-cloak class="bg-white border border-purple-100 rounded-2xl p-6 shadow-sm">
                             <div class="flex flex-col md:flex-row md:items-start md:justify-between gap-4 mb-6">
@@ -1224,6 +1251,7 @@
                 adminCreating: false,
                 adminAssigning: false,
                 adminTasks: [],
+                adminFilteredTasks: [],
                 adminTasksTotal: 0,
                 adminTasksLoading: false,
                 adminTasksError: '',
@@ -1241,6 +1269,10 @@
 
                 // Фильтры
                 filters: {
+                    subject: '',
+                    difficulty: ''
+                },
+                adminFilters: {
                     subject: '',
                     difficulty: ''
                 },
@@ -1546,10 +1578,14 @@
                         this.adminTasks = [];
                         this.adminTasksTotal = 0;
                         this.adminTasksLoading = false;
+                        this.filterAdminTasks();
+                        this.adminTasksError = '';
                     }
 
                     try {
                         let adminTasksPayload = null;
+                        let adminTasksFetchFailed = false;
+                        let adminTasksErrorDetails = '';
 
                         if (isAdminUser && this.token) {
                             try {
@@ -1564,18 +1600,24 @@
                                     this.logout();
                                     return;
                                 }
-                                const details = error.payload?.detail || 'Не удалось загрузить административные задания';
-                                this.adminTasksError = details;
-                                console.error('Failed to load admin tasks:', error.payload || error);
+                                adminTasksFetchFailed = true;
+                                const detailText = (typeof error.payload?.detail === 'string' && error.payload.detail.trim())
+                                    ? error.payload.detail.trim()
+                                    : 'Не удалось загрузить административные задания';
+                                const statusLabel = error.status ? ` (HTTP ${error.status})` : '';
+                                adminTasksErrorDetails = `${detailText}${statusLabel}`;
+
+                                console.error('Failed to load admin tasks:', {
+                                    requestUrl: `${this.apiUrl}/admin/tasks`,
+                                    status: error.status,
+                                    payload: error.payload,
+                                    message: error.message,
+                                    stack: error.stack
+                                });
                             }
                         }
 
                         const normalizedAdminTasks = normalizeTaskCollection(adminTasksPayload, 'admin tasks');
-
-                        if (isAdminUser) {
-                            this.adminTasks = normalizedAdminTasks.items;
-                            this.adminTasksTotal = normalizedAdminTasks.total;
-                        }
 
                         let baseTasks = normalizedAdminTasks;
 
@@ -1587,6 +1629,24 @@
                                 console.error('Failed to load public tasks:', error.payload || error);
                                 baseTasks = { items: [], total: 0 };
                             }
+                        }
+                        if (isAdminUser) {
+                            if (!adminTasksFetchFailed) {
+                                this.adminTasks = normalizedAdminTasks.items;
+                                this.adminTasksTotal = normalizedAdminTasks.total;
+                                this.adminTasksError = '';
+                            } else {
+                                this.adminTasks = baseTasks.items;
+                                this.adminTasksTotal = baseTasks.total;
+
+                                const debugHint = `Проверьте вкладку Network → ${this.apiUrl}/admin/tasks`;
+                                const fallbackNote = baseTasks.items.length
+                                    ? 'Показан список из пользовательского раздела, чтобы вы могли продолжить работу.'
+                                    : 'Список заданий сейчас пуст.';
+                                this.adminTasksError = `${adminTasksErrorDetails || 'Админ-API недоступно'}. ${fallbackNote} ${debugHint}`;
+                            }
+
+                            this.filterAdminTasks();
                         }
 
                         let assignedTasks = { items: [], total: 0 };
@@ -1623,6 +1683,7 @@
                         this.tasks = unique;
                         this.assignedTaskIds = Array.from(assignedIds);
                         this.filterTasks();
+                        this.filterAdminTasks();
                     } catch (error) {
                         console.error('Error loading tasks:', error);
                         this.showNotification('Не удалось загрузить задания', 'error');
@@ -1640,7 +1701,14 @@
                         return true;
                     });
                 },
-
+                filterAdminTasks() {
+                    this.adminFilteredTasks = this.adminTasks.filter(task => {
+                        if (!task) return false;
+                        if (this.adminFilters.subject && task.subject !== this.adminFilters.subject) return false;
+                        if (this.adminFilters.difficulty && task.difficulty != this.adminFilters.difficulty) return false;
+                        return true;
+                    });
+                },
                 async loadSubmissions() {
                     if (!this.token) {
                         this.submissions = [];
