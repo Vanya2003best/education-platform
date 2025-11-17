@@ -259,11 +259,7 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-@router.api_route(
-    "/tasks",
-    methods=["GET", "HEAD"],
-    response_model=TaskListResponse,
-)
+@router.get("/tasks", response_model=TaskListResponse)
 async def get_admin_tasks(
         request: Request,
         response: Response,
@@ -281,6 +277,7 @@ async def get_admin_tasks(
         ),
 ):
     """Получить список заданий для административной панели."""
+    print(f"Endpoint called: {request.url}")
     # Административный список должен показывать все задания, чтобы
     # администраторы могли управлять и «обычными» заданиями преподавателей,
     # и собственными заданиями. Ранее здесь был фильтр только по
@@ -366,6 +363,38 @@ async def get_admin_tasks(
         })
         return Response(status_code=status.HTTP_200_OK, headers=head_headers)
     return TaskListResponse(items=serialized, total=total)
+
+@router.head("/tasks", include_in_schema=False)
+async def head_admin_tasks(
+        request: Request,
+        response: Response,
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db),
+        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
+        subject: Optional[str] = Query(None, max_length=50),
+        difficulty: Optional[int] = Query(None, ge=1, le=5),
+        task_type: Optional[str] = Query(None, max_length=50),
+        search: Optional[str] = Query(None, max_length=200),
+        skip: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),
+        assigned_user_id: Optional[int] = Query(
+            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
+        ),
+):
+    return await get_admin_tasks(
+        request=request,
+        response=response,
+        current_user=current_user,
+        db=db,
+        include_inactive=include_inactive,
+        subject=subject,
+        difficulty=difficulty,
+        task_type=task_type,
+        search=search,
+        skip=skip,
+        limit=limit,
+        assigned_user_id=assigned_user_id,
+    )
 
 def _build_admin_preflight_response(request: Request) -> Response:
     """Return a shared 204 response for admin task preflight requests."""
@@ -463,10 +492,12 @@ async def create_task(
 async def update_task(
         task_id: int,
         task_data: TaskUpdate,
+        request: Request,
         current_user: User = Depends(require_admin),
         db: AsyncSession = Depends(get_async_db),
 ):
     """Обновить существующее задание."""
+    print(f"Endpoint called: {request.url}")
 
     update_payload = task_data.model_dump(exclude_unset=True)
     if not update_payload:
@@ -495,10 +526,12 @@ async def update_task(
 @router.delete("/tasks/{task_id}")
 async def delete_task(
         task_id: int,
+            request: Request,
         current_user: User = Depends(require_admin),
         db: AsyncSession = Depends(get_async_db),
 ):
     """Удалить задание и связанные назначения."""
+    print(f"Endpoint called: {request.url}")
 
     result = await db.execute(select(Task).where(Task.id == task_id))
     task = result.scalar_one_or_none()
