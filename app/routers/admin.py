@@ -224,6 +224,7 @@ async def grant_coins(
         "new_balance": user.coins
     }
 @router.get("/tasks", response_model=TaskListResponse)
+@router.get("/tasks/", response_model=TaskListResponse, include_in_schema=False)
 async def get_admin_tasks(
         request: Request,
         response: Response,
@@ -313,14 +314,10 @@ async def get_admin_tasks(
 
     response.headers.update(total_header)
 
-    if request.method == "HEAD":
-        head_headers = dict(total_header)
-        head_headers.setdefault("Allow", "GET, HEAD")
-        head_headers.setdefault("Access-Control-Expose-Headers", "X-Total-Count")
-        return Response(status_code=status.HTTP_200_OK, headers=head_headers)
     return TaskListResponse(items=serialized, total=total)
 
 @router.head("/tasks", include_in_schema=False)
+@router.head("/tasks/", include_in_schema=False)
 async def head_admin_tasks(
         request: Request,
         response: Response,
@@ -351,6 +348,36 @@ async def head_admin_tasks(
         limit=limit,
         assigned_user_id=assigned_user_id,
     )
+
+
+def _build_admin_preflight_response(request: Request) -> Response:
+    origin = request.headers.get("origin") or "*"
+    request_headers = request.headers.get("access-control-request-headers")
+    allow_headers = request_headers or "Authorization, Content-Type"
+
+    headers = {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": allow_headers,
+        "Access-Control-Max-Age": "86400",
+    }
+
+    if origin != "*":
+        headers["Vary"] = "Origin"
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT, headers=headers)
+
+
+@router.options("/tasks", include_in_schema=False)
+@router.options("/tasks/", include_in_schema=False)
+async def admin_tasks_collection_preflight(request: Request) -> Response:
+    return _build_admin_preflight_response(request)
+
+
+@router.options("/tasks/{path:path}", include_in_schema=False)
+async def admin_tasks_preflight(request: Request, path: Optional[str] = None) -> Response:
+    return _build_admin_preflight_response(request)
+
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
