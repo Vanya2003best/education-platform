@@ -223,17 +223,7 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-@router.api_route(
-    "/tasks",
-    methods=["GET", "HEAD"],
-    response_model=TaskListResponse,
-)
-@router.api_route(
-    "/tasks/",
-    methods=["GET", "HEAD"],
-    response_model=TaskListResponse,
-    include_in_schema=False,
-)
+@router.get("/tasks", response_model=TaskListResponse)
 async def get_admin_tasks(
         request: Request,
         response: Response,
@@ -353,6 +343,26 @@ def _build_admin_preflight_response(request: Request) -> Response:
 @router.options("/tasks/", include_in_schema=False)
 async def admin_tasks_collection_preflight(request: Request) -> Response:
     return _build_admin_preflight_response(request)
+
+
+# HEAD-запросы должны явно вызывать обработчик для корректных заголовков
+router.add_api_route(
+    "/tasks",
+    get_admin_tasks,
+    methods=["HEAD"],
+    response_model=TaskListResponse,
+    include_in_schema=False,
+)
+
+
+# Поддерживаем /tasks/ как alias без необходимости редиректов
+router.add_api_route(
+    "/tasks/",
+    get_admin_tasks,
+    methods=["GET", "HEAD"],
+    response_model=TaskListResponse,
+    include_in_schema=False,
+)
 
 
 @router.options("/tasks/{path:path}", include_in_schema=False)

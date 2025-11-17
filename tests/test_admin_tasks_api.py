@@ -237,6 +237,11 @@ def test_admin_tasks_endpoint_returns_sanitized_payload(client: TestClient) -> N
     assert isinstance(task["assigned_users"], list)
 
 
+def test_admin_tasks_endpoint_accepts_trailing_slash(client: TestClient) -> None:
+    response = client.get("/api/admin/tasks/", headers={"Authorization": "Bearer token"})
+    assert response.status_code == 200
+
+
 def test_admin_task_collection_get_registered_before_options() -> None:
     """Ensure GET /tasks is registered before OPTIONS fallbacks."""
 
@@ -357,6 +362,21 @@ def test_admin_tasks_head_request_returns_total_header(client: TestClient) -> No
     )
     assert response.status_code == 200
     assert response.headers.get("x-total-count") == "1"
+
+
+def test_admin_can_delete_task(client: TestClient) -> None:
+    response = client.delete(
+        "/api/admin/tasks/42",
+        headers={"Authorization": "Bearer token"},
+    )
+    assert response.status_code == 200
+
+    follow_up = client.get(
+        "/api/admin/tasks",
+        headers={"Authorization": "Bearer token"},
+    )
+    assert follow_up.status_code == 200
+    assert follow_up.json() == []
 
 if False:  # pragma: no cover - legacy integration tests kept for reference
     def test_create_admin_task_accepts_complete_payload(client: TestClient) -> None:
