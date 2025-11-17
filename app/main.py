@@ -120,17 +120,19 @@ cors_kwargs = dict(
     expose_headers=["X-Total-Count", "X-Page", "X-Per-Page"],
 )
 
-# Базовый список origin'ов
-origins = list(getattr(settings, "effective_cors_origins", []) or [])
-for required_origin in ("http://localhost:8000", "http://127.0.0.1:8000"):
-    if required_origin not in origins:
-        origins.append(required_origin)
+effective_origins = list(getattr(settings, "effective_cors_origins", []) or [])
+required_local_origins = ("http://localhost:8000", "http://127.0.0.1:8000")
 
-    if origins:
-        cors_kwargs["allow_origins"] = origins
-else:
-    # На всякий случай разрешаем локалхосты по regex
+if effective_origins:
+    for required_origin in required_local_origins:
+        if required_origin not in effective_origins:
+            effective_origins.append(required_origin)
+
+    cors_kwargs["allow_origins"] = effective_origins
+elif settings.cors_allow_all:
     cors_kwargs["allow_origin_regex"] = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+else:
+    cors_kwargs["allow_origins"] = list(required_local_origins)
 
 app.add_middleware(CORSMiddleware, **cors_kwargs)
 

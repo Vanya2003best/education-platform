@@ -223,8 +223,17 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-@router.get("/tasks", response_model=TaskListResponse)
-@router.get("/tasks/", response_model=TaskListResponse, include_in_schema=False)
+@router.api_route(
+    "/tasks",
+    methods=["GET", "HEAD"],
+    response_model=TaskListResponse,
+)
+@router.api_route(
+    "/tasks/",
+    methods=["GET", "HEAD"],
+    response_model=TaskListResponse,
+    include_in_schema=False,
+)
 async def get_admin_tasks(
         request: Request,
         response: Response,
@@ -243,6 +252,7 @@ async def get_admin_tasks(
 ):
     """Получить список заданий для административной панели."""
     print(f"Endpoint called: {request.url}")
+    is_head_request = request.method.upper() == "HEAD"
     # Административный список должен показывать все задания, чтобы
     # администраторы могли управлять и «обычными» заданиями преподавателей,
     # и собственными заданиями. Ранее здесь был фильтр только по
@@ -303,52 +313,23 @@ async def get_admin_tasks(
         total = first_row[0] if first_row else 0
     else:
         total = len(tasks)
+    total_header = {"X-Total-Count": str(total)}
+    response.headers.update(total_header)
+
+    if is_head_request:
+        head_response = Response(status_code=status.HTTP_200_OK)
+        head_response.headers.update(response.headers)
+        return head_response
+
     serialized = serialize_tasks(tasks)
     user_agent = request.headers.get("user-agent", "").lower()
-    total_header = {"X-Total-Count": str(total)}
     if user_agent.startswith("testclient"):
         return JSONResponse(
             content=[item.model_dump(mode="json") for item in serialized],
             headers=total_header,
         )
 
-    response.headers.update(total_header)
-
     return TaskListResponse(items=serialized, total=total)
-
-@router.head("/tasks", include_in_schema=False)
-@router.head("/tasks/", include_in_schema=False)
-async def head_admin_tasks(
-        request: Request,
-        response: Response,
-        current_user: User = Depends(require_admin),
-        db: AsyncSession = Depends(get_async_db),
-        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
-        subject: Optional[str] = Query(None, max_length=50),
-        difficulty: Optional[int] = Query(None, ge=1, le=5),
-        task_type: Optional[str] = Query(None, max_length=50),
-        search: Optional[str] = Query(None, max_length=200),
-        skip: int = Query(0, ge=0),
-        limit: int = Query(50, ge=1, le=200),
-        assigned_user_id: Optional[int] = Query(
-            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
-        ),
-):
-    return await get_admin_tasks(
-        request=request,
-        response=response,
-        current_user=current_user,
-        db=db,
-        include_inactive=include_inactive,
-        subject=subject,
-        difficulty=difficulty,
-        task_type=task_type,
-        search=search,
-        skip=skip,
-        limit=limit,
-        assigned_user_id=assigned_user_id,
-    )
-
 
 def _build_admin_preflight_response(request: Request) -> Response:
     origin = request.headers.get("origin") or "*"
@@ -357,7 +338,7 @@ def _build_admin_preflight_response(request: Request) -> Response:
 
     headers = {
         "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
+        "Access-Control-Allow-Methods": "GET, HEAD, POST, PATCH, DELETE, OPTIONS",
         "Access-Control-Allow-Headers": allow_headers,
         "Access-Control-Max-Age": "86400",
     }
@@ -518,7 +499,10 @@ async def assign_task(
     task = result.scalar_one_or_none()
 
     if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
 
     result = await db.execute(
         select(User.id).where(User.id.in_(assignment.user_ids))
