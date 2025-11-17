@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, or_
+from sqlalchemy import select, func
 from typing import Optional
 
 from app.database import get_async_db
@@ -29,10 +29,11 @@ async def get_tasks(
     """
     Получить список заданий с фильтрами
     """
-    filters = [
-        task_is_effectively_active(),
-        or_(Task.is_admin_task.is_(False), Task.is_admin_task.is_(None)),
-    ]
+    # Публичный список заданий должен показывать все опубликованные задания,
+    # независимо от того, кто их создал (администратор или преподаватель).
+    # Ранее мы исключали задания, созданные администраторами, что ломало API
+    # и возвращало неполный список.
+    filters = [task_is_effectively_active()]
 
     # Фильтры
     if subject:
