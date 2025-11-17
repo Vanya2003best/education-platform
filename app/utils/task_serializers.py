@@ -209,6 +209,7 @@ def serialize_task(task: Task) -> TaskResponse:
         "description": description,
         "task_type": task_type,
         "status": _normalize_task_status(getattr(task, "status", None)),
+        "is_admin_task": bool(getattr(task, "is_admin_task", False)),
         "subject": subject,
         "difficulty": difficulty,
         "content_html": None if getattr(task, "content_html", None) is None else str(getattr(task, "content_html")),

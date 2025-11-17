@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
+from sqlalchemy import select, func, or_
 from typing import Optional
 
 from app.database import get_async_db
@@ -29,7 +29,10 @@ async def get_tasks(
     """
     Получить список заданий с фильтрами
     """
-    filters = [task_is_effectively_active()]
+    filters = [
+        task_is_effectively_active(),
+        or_(Task.is_admin_task.is_(False), Task.is_admin_task.is_(None)),
+    ]
 
     # Фильтры
     if subject:

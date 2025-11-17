@@ -192,6 +192,7 @@ class TaskUpdate(BaseModel):
 class TaskResponse(TaskBase):
     id: int
     status: str = Field(default="active")
+    is_admin_task: bool = False
     topic: Optional[str]
     tags: Optional[List[str]]
     min_level: int

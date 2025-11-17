@@ -137,9 +137,25 @@ async def test_public_task_list_returns_items(async_client, seeded_users):
     try:
         await asyncio.to_thread(session.execute, delete(Task))
         session.add_all([
-            Task(title="Задание 1", description="Описание задания номер один", task_type="math", status=TaskStatus.ACTIVE),
-            Task(title="Задание 2", description="Описание задания номер два", task_type="math", status=TaskStatus.ACTIVE),
-            Task(title="Черновик", description="Черновик задания для теста", task_type="math", status=TaskStatus.ARCHIVED),
+            Task(
+                title="Задание 1",
+                description="Описание задания номер один",
+                task_type="math",
+                status=TaskStatus.ACTIVE,
+                is_admin_task=True,
+            ),
+            Task(
+                title="Задание 2",
+                description="Описание задания номер два",
+                task_type="math",
+                status=TaskStatus.ACTIVE,
+            ),
+            Task(
+                title="Черновик",
+                description="Черновик задания для теста",
+                task_type="math",
+                status=TaskStatus.ARCHIVED,
+            ),
         ])
         await asyncio.to_thread(session.commit)
     finally:
@@ -164,12 +180,21 @@ async def test_admin_task_listing_requires_admin(async_client, seeded_users):
     session = SessionLocal()
     try:
         await asyncio.to_thread(session.execute, delete(Task))
-        session.add(Task(
-            title="Admin Task",
-            description="Admin created task for listing",
-            task_type="math",
-            status=TaskStatus.ACTIVE,
-        ))
+        session.add_all([
+            Task(
+                title="Admin Task",
+                description="Admin created task for listing",
+                task_type="math",
+                status=TaskStatus.ACTIVE,
+                is_admin_task=True,
+            ),
+            Task(
+                title="Teacher Task",
+                description="Teacher created task also needs admin visibility",
+                task_type="math",
+                status=TaskStatus.ACTIVE,
+            ),
+        ])
         await asyncio.to_thread(session.commit)
     finally:
         await asyncio.to_thread(session.close)
@@ -177,8 +202,9 @@ async def test_admin_task_listing_requires_admin(async_client, seeded_users):
     response = await async_client.get("/api/admin/tasks")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 1
-    assert data["items"][0]["title"] == "Admin Task"
+    assert data["total"] == 2
+    titles = {item["title"] for item in data["items"]}
+    assert {"Admin Task", "Teacher Task"} <= titles
 
 
 @pytest.mark.anyio

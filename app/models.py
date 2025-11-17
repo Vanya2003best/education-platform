@@ -170,6 +170,7 @@ class Task(Base):
 
     # Статус и видимость
     status = Column(Enum(TaskStatus), default=TaskStatus.ACTIVE, index=True)
+    is_admin_task = Column(Boolean, default=False, nullable=False, index=True)
     is_premium = Column(Boolean, default=False)  # Только для премиум
     is_featured = Column(Boolean, default=False)  # Рекомендованное
     order_index = Column(Integer, default=0)  # Порядок отображения
