@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, Query, Response, 
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, update, and_, or_
+from sqlalchemy.orm import selectinload
 from typing import List, Optional
 from datetime import datetime, timedelta
 
@@ -272,6 +273,9 @@ async def get_admin_tasks(
         search: Optional[str] = Query(None, max_length=200),
         skip: int = Query(0, ge=0),
         limit: int = Query(50, ge=1, le=200),
+        assigned_user_id: Optional[int] = Query(
+            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
+        ),
 ):
     """Получить список заданий для административной панели."""
     # Административный список должен показывать все задания, чтобы
@@ -292,12 +296,22 @@ async def get_admin_tasks(
     if task_type:
         filters.append(Task.task_type == task_type)
 
-    query = select(Task)
+    assignment_loader = selectinload(Task.assignments).selectinload(TaskAssignment.user)
+    query = select(Task).options(assignment_loader)
     count_query = select(func.count(Task.id))
 
     if filters:
         query = query.where(*filters)
         count_query = count_query.where(*filters)
+
+    if assigned_user_id is not None:
+        assignment_ids = (
+            select(TaskAssignment.task_id)
+            .where(TaskAssignment.user_id == assigned_user_id)
+            .scalar_subquery()
+        )
+        query = query.where(Task.id.in_(assignment_ids))
+        count_query = count_query.where(Task.id.in_(assignment_ids))
 
     if search:
         pattern = f"%{search.strip()}%"

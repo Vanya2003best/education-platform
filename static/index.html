@@ -801,6 +801,16 @@
                                     <option value="4">⭐⭐⭐⭐ Очень сложно</option>
                                     <option value="5">⭐⭐⭐⭐⭐ Эксперт</option>
                                 </select>
+
+                                <select @change="filterAdminTasks()" x-model="adminFilters.assigneeId"
+                                        :disabled="!adminAssigneeFilterOptions.length"
+                                        class="px-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-500 disabled:bg-gray-100 disabled:text-gray-400">
+                                    <option value="">Все ученики</option>
+                                    <option value="" disabled x-show="!adminAssigneeFilterOptions.length">Назначений пока нет</option>
+                                    <template x-for="option in adminAssigneeFilterOptions" :key="`assignee-filter-${option.id}`">
+                                        <option :value="option.id" x-text="option.label"></option>
+                                    </template>
+                                </select>
                             </div>
 
                             <p x-show="adminTasksError" class="text-sm text-red-500 mb-4" x-text="adminTasksError"></p>
@@ -1250,6 +1260,7 @@
                 adminSearchLoadingAssign: false,
                 adminCreating: false,
                 adminAssigning: false,
+                adminAssigneeFilterOptions: [],
                 adminTasks: [],
                 adminFilteredTasks: [],
                 adminTasksTotal: 0,
@@ -1274,7 +1285,8 @@
                 },
                 adminFilters: {
                     subject: '',
-                    difficulty: ''
+                    difficulty: '',
+                    assigneeId: ''
                 },
 
                 // Инициализация
@@ -1512,6 +1524,7 @@
                     this.adminSearchResultsAssign = [];
                     this.adminCreating = false;
                     this.adminAssigning = false;
+                    this.adminAssigneeFilterOptions = [];
                     if (typeof this.resetAdminTaskForm === 'function') {
                         this.resetAdminTaskForm();
                     }
@@ -1522,7 +1535,11 @@
                     this.adminTasks = [];
                     this.adminTasksTotal = 0;
                     this.adminTasksLoading = false;
-                    this.adminTasksError = '';
+                    this.adminTasksError = '';if (this.adminFilters) {
+                        this.adminFilters.subject = '';
+                        this.adminFilters.difficulty = '';
+                        this.adminFilters.assigneeId = '';
+                    }
                     this.activeTab = 'tasks';
                     localStorage.removeItem('access_token');
                     if (showMessage) {
@@ -1580,6 +1597,10 @@
                         this.adminTasksLoading = false;
                         this.filterAdminTasks();
                         this.adminTasksError = '';
+                        this.adminAssigneeFilterOptions = [];
+                        if (this.adminFilters) {
+                            this.adminFilters.assigneeId = '';
+                        }
                     }
 
                     try {
@@ -1635,6 +1656,7 @@
                                 this.adminTasks = normalizedAdminTasks.items;
                                 this.adminTasksTotal = normalizedAdminTasks.total;
                                 this.adminTasksError = '';
+                                this.updateAdminAssigneeFilters(this.adminTasks);
                             } else {
                                 this.adminTasks = baseTasks.items;
                                 this.adminTasksTotal = baseTasks.total;
@@ -1644,6 +1666,7 @@
                                     ? 'Показан список из пользовательского раздела, чтобы вы могли продолжить работу.'
                                     : 'Список заданий сейчас пуст.';
                                 this.adminTasksError = `${adminTasksErrorDetails || 'Админ-API недоступно'}. ${fallbackNote} ${debugHint}`;
+                                this.updateAdminAssigneeFilters(this.adminTasks);
                             }
 
                             this.filterAdminTasks();
@@ -1706,8 +1729,44 @@
                         if (!task) return false;
                         if (this.adminFilters.subject && task.subject !== this.adminFilters.subject) return false;
                         if (this.adminFilters.difficulty && task.difficulty != this.adminFilters.difficulty) return false;
+                        const filterAssigneeId = Number(this.adminFilters.assigneeId);
+                        if (filterAssigneeId) {
+                            const assignedUsers = Array.isArray(task.assigned_users) ? task.assigned_users : [];
+                            const assignedIds = assignedUsers.map(user => Number(user?.id)).filter(Boolean);
+                            if (!assignedIds.includes(filterAssigneeId)) return false;
+                        }
                         return true;
                     });
+                },
+                updateAdminAssigneeFilters(tasksSource = null) {
+                    const source = Array.isArray(tasksSource) ? tasksSource : this.adminTasks;
+                    const map = new Map();
+
+                    for (const task of source || []) {
+                        if (!task || !Array.isArray(task.assigned_users)) continue;
+                        for (const user of task.assigned_users) {
+                            const id = Number(user?.id);
+                            if (!id || map.has(id)) continue;
+                            const parts = [user?.username, user?.email].filter(Boolean);
+                            const label = parts.length > 1 ? `${parts[0]} (${parts[1]})` : (parts[0] || `ID ${id}`);
+                            map.set(id, { id, label });
+                        }
+                    }
+
+                    const collator = (typeof Intl !== 'undefined' && typeof Intl.Collator === 'function')
+                        ? new Intl.Collator('ru', { sensitivity: 'base' })
+                        : null;
+                    this.adminAssigneeFilterOptions = Array.from(map.values()).sort((a, b) => {
+                        if (collator) {
+                            return collator.compare(a.label, b.label);
+                        }
+                        return (a.label || '').localeCompare(b.label || '', 'ru');
+                    });
+
+                    const currentFilter = Number(this.adminFilters.assigneeId);
+                    if (currentFilter && !map.has(currentFilter)) {
+                        this.adminFilters.assigneeId = '';
+                    }
                 },
                 async loadSubmissions() {
                     if (!this.token) {

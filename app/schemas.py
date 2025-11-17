@@ -189,6 +189,15 @@ class TaskUpdate(BaseModel):
     is_active: Optional[bool] = None
     content_html: Optional[str] = None
 
+class TaskAssigneeInfo(BaseModel):
+    id: int
+    username: Optional[str] = None
+    email: Optional[str] = None
+    assigned_at: Optional[datetime] = None
+    is_completed: Optional[bool] = None
+    completed_at: Optional[datetime] = None
+
+
 class TaskResponse(TaskBase):
     id: int
     status: str = Field(default="active")
@@ -210,6 +219,7 @@ class TaskResponse(TaskBase):
     success_rate: float
     avg_score: float
     created_at: datetime
+    assigned_users: List[TaskAssigneeInfo] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 class TaskListResponse(BaseModel):

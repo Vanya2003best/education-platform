@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
-from typing import Iterable, List, Sequence
+from typing import Any, Iterable, List, Sequence
 
 from app.models import Task, TaskStatus
 from app.schemas import TaskResponse, TaskListResponse
@@ -230,6 +230,7 @@ def serialize_task(task: Task) -> TaskResponse:
         "success_rate": _normalize_float(getattr(task, "success_rate", 0.0), default=0.0, minimum=0.0, maximum=100.0),
         "avg_score": _normalize_float(getattr(task, "avg_score", 0.0), default=0.0, minimum=0.0, maximum=100.0),
         "created_at": created_at,
+        "assigned_users": _serialize_task_assignees(task),
     }
 
     try:
@@ -237,6 +238,40 @@ def serialize_task(task: Task) -> TaskResponse:
     except ValidationError:
         # As a last resort, construct the model without validation to avoid breaking legacy payloads.
         return TaskResponse.model_construct(**payload)
+
+def _serialize_task_assignees(task: Task) -> list[dict[str, Any]]:
+    """Return lightweight information about task assignments if preloaded."""
+
+    task_dict = getattr(task, "__dict__", None)
+    if not isinstance(task_dict, dict) or "assignments" not in task_dict:
+        return []
+
+    raw_assignments = task_dict.get("assignments") or []
+    serialized: list[dict[str, Any]] = []
+    seen_ids: set[int] = set()
+
+    for assignment in raw_assignments:
+        if assignment is None:
+            continue
+
+        user = getattr(assignment, "user", None)
+        user_id = getattr(assignment, "user_id", None) or getattr(user, "id", None)
+        if not user_id or user_id in seen_ids:
+            continue
+
+        seen_ids.add(user_id)
+        serialized.append(
+            {
+                "id": int(user_id),
+                "username": getattr(user, "username", None),
+                "email": getattr(user, "email", None),
+                "assigned_at": getattr(assignment, "assigned_at", None),
+                "is_completed": getattr(assignment, "is_completed", None),
+                "completed_at": getattr(assignment, "completed_at", None),
+            }
+        )
+
+    return serialized
 
 def serialize_tasks(tasks: Iterable[Task]) -> List[TaskResponse]:
     """Serialize a collection of tasks."""

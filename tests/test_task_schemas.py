@@ -45,6 +45,21 @@ class DummyTask:
     avg_score: object = None
     created_at: None = None
     updated_at: None = None
+    assignments: object = None
+
+@dataclass
+class DummyAssignment:
+    user_id: int
+    assigned_at: datetime | None = None
+    is_completed: bool | None = None
+    completed_at: datetime | None = None
+    user: object | None = None
+
+@dataclass
+class DummyUser:
+    id: int
+    username: str | None = None
+    email: str | None = None
 
 
 def test_task_create_accepts_custom_task_type():
@@ -197,3 +212,23 @@ def test_serialize_task_truncates_subject_and_percentages():
     assert len(serialized.task_type) <= 50
     assert serialized.success_rate == pytest.approx(87.5)
     assert serialized.avg_score == pytest.approx(91.5)
+
+def test_serialize_task_includes_assignments_when_prefetched():
+    user = DummyUser(id=7, username="alice", email="alice@example.com")
+    assignment = DummyAssignment(
+        user_id=7,
+        assigned_at=datetime(2024, 1, 1, 12, 0, 0),
+        is_completed=True,
+        completed_at=datetime(2024, 1, 2, 15, 30, 0),
+        user=user,
+    )
+    task = DummyTask(assignments=[assignment])
+
+    serialized = serialize_task(task)
+
+    assert serialized.assigned_users, "Expected assignment info in payload"
+    first_assignment = serialized.assigned_users[0]
+    assert first_assignment.id == 7
+    assert first_assignment.username == "alice"
+    assert first_assignment.email == "alice@example.com"
+    assert first_assignment.is_completed is True

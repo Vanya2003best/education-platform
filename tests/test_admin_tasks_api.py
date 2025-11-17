@@ -78,6 +78,7 @@ class DummyTask:
         self.updated_at = datetime(2024, 1, 1, 12, 0, 0)
         self.status = TaskStatus.ACTIVE
         self.is_admin_task = True
+        self.assignments = []
 
 
 class DummyResult:
@@ -233,6 +234,7 @@ def test_admin_tasks_endpoint_returns_sanitized_payload(client: TestClient) -> N
     assert task["success_rate"] == pytest.approx(92.0)
     assert task["avg_score"] == pytest.approx(88.75)
     assert task["created_at"] is not None
+    assert isinstance(task["assigned_users"], list)
 
 
 def test_admin_task_collection_get_registered_before_options() -> None:
@@ -257,6 +259,15 @@ def test_http_exception_handler_preserves_allow_header(client: TestClient) -> No
 
     payload = response.json()
     assert payload["error"]["message"].lower() == "method not allowed"
+
+
+def test_admin_tasks_endpoint_accepts_assignee_filter(client: TestClient) -> None:
+    response = client.get(
+        "/api/admin/tasks",
+        headers={"Authorization": "Bearer token"},
+        params={"assigned_user_id": 5},
+    )
+    assert response.status_code == 200
 
 
 def test_http_exception_handler_preserves_allow_header(client: TestClient) -> None:
