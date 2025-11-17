@@ -261,14 +261,8 @@ async def grant_coins(
     }
 @router.api_route(
     "/tasks",
-    methods=["GET", "HEAD", "OPTIONS"],
+    methods=["GET", "HEAD"],
     response_model=TaskListResponse,
-)
-@router.api_route(
-    "/tasks/",
-    methods=["GET", "HEAD", "OPTIONS"],
-    response_model=TaskListResponse,
-    include_in_schema=False,
 )
 async def get_admin_tasks(
         request: Request,
@@ -287,9 +281,6 @@ async def get_admin_tasks(
         ),
 ):
     """Получить список заданий для административной панели."""
-    if request.method == "OPTIONS":
-        return _build_admin_preflight_response(request)
-
     # Административный список должен показывать все задания, чтобы
     # администраторы могли управлять и «обычными» заданиями преподавателей,
     # и собственными заданиями. Ранее здесь был фильтр только по
@@ -384,7 +375,6 @@ def _build_admin_preflight_response(request: Request) -> Response:
     )
 
 @router.options("/tasks", include_in_schema=False)
-@router.options("/tasks/", include_in_schema=False)
 async def admin_tasks_collection_preflight(request: Request) -> Response:
     """Serve collection-level preflight requests without auth dependencies."""
 
@@ -489,7 +479,7 @@ async def update_task(
     task = result.scalar_one_or_none()
 
     if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задание не найдено")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
     for field_name, value in update_payload.items():
         setattr(task, field_name, value)
@@ -514,7 +504,7 @@ async def delete_task(
     task = result.scalar_one_or_none()
 
     if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Задание не найдено")
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
 
     await db.delete(task)
     await db.commit()
@@ -540,7 +530,7 @@ async def assign_task(
     task = result.scalar_one_or_none()
 
     if not task:
-        raise HTTPException(status_code=404, detail="Задание не найдено")
+        raise HTTPException(status_code=404, detail="Task not found")
 
     result = await db.execute(
         select(User.id).where(User.id.in_(assignment.user_ids))

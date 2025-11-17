@@ -113,12 +113,15 @@ app = FastAPI(
 # Middleware
 cors_kwargs = dict(
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
-    allow_methods=["*"],
+    allow_methods=["OPTIONS", "GET", "POST", "PATCH", "DELETE", "HEAD"],
     allow_headers=["*"],
     expose_headers=["X-Total-Count", "X-Page", "X-Per-Page"],
 )
 
-effective_origins = settings.effective_cors_origins
+effective_origins = list(settings.effective_cors_origins)
+for required_origin in ("http://localhost:8000", "http://127.0.0.1:8000"):
+    if required_origin not in effective_origins:
+        effective_origins.append(required_origin)
 if effective_origins:
     cors_kwargs["allow_origins"] = effective_origins
 elif settings.cors_allow_all and not effective_origins:
