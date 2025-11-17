@@ -259,8 +259,17 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-@router.get("/tasks", response_model=TaskListResponse)
-@router.get("/tasks/", response_model=TaskListResponse, include_in_schema=False)
+@router.api_route(
+    "/tasks",
+    methods=["GET", "HEAD", "OPTIONS"],
+    response_model=TaskListResponse,
+)
+@router.api_route(
+    "/tasks/",
+    methods=["GET", "HEAD", "OPTIONS"],
+    response_model=TaskListResponse,
+    include_in_schema=False,
+)
 async def get_admin_tasks(
         request: Request,
         response: Response,
@@ -278,6 +287,9 @@ async def get_admin_tasks(
         ),
 ):
     """Получить список заданий для административной панели."""
+    if request.method == "OPTIONS":
+        return _build_admin_preflight_response(request)
+
     # Административный список должен показывать все задания, чтобы
     # администраторы могли управлять и «обычными» заданиями преподавателей,
     # и собственными заданиями. Ранее здесь был фильтр только по
@@ -371,9 +383,14 @@ def _build_admin_preflight_response(request: Request) -> Response:
         headers=_build_admin_task_cors_headers(request),
     )
 
-
 @router.options("/tasks", include_in_schema=False)
 @router.options("/tasks/", include_in_schema=False)
+async def admin_tasks_collection_preflight(request: Request) -> Response:
+    """Serve collection-level preflight requests without auth dependencies."""
+
+    return _build_admin_preflight_response(request)
+
+
 @router.options("/tasks/{path:path}", include_in_schema=False)
 async def admin_tasks_preflight(request: Request, path: Optional[str] = None) -> Response:
     """Обрабатывать preflight-запросы для UI.

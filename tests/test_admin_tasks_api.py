@@ -309,21 +309,56 @@ def test_admin_tasks_nested_preflight_handles_subpaths(client: TestClient) -> No
     allow_methods = headers.get("access-control-allow-methods", "").lower()
     assert "patch" in allow_methods
 
-    def test_admin_tasks_preflight_options_request(client: TestClient) -> None:
+def test_admin_tasks_preflight_options_request(client: TestClient) -> None:
+    response = client.options(
+        "/api/admin/tasks",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization, content-type",
+        },
+    )
+    assert response.status_code in (200, 204)
+    headers = {k.lower(): v for k, v in response.headers.items()}
+    allow_methods = headers.get("access-control-allow-methods", "").lower()
+    for method in ("post", "patch", "delete"):
+        assert method in allow_methods, allow_methods
+
+
+def test_admin_tasks_preflight_does_not_require_authorization(client: TestClient) -> None:
+    """OPTIONS handler must bypass admin dependency so browsers can preflight."""
+
+    original_override = app.dependency_overrides.get(require_admin)
+
+    def _unexpected_call() -> None:  # pragma: no cover - defensive guard
+        raise AssertionError("require_admin should not run for OPTIONS /tasks")
+
+    app.dependency_overrides[require_admin] = _unexpected_call
+
+    try:
         response = client.options(
             "/api/admin/tasks",
             headers={
-                "Origin": "http://localhost:3000",
-                "Access-Control-Request-Method": "POST",
-                "Access-Control-Request-Headers": "authorization, content-type",
+                "Origin": "http://localhost:8000",
+                "Access-Control-Request-Method": "GET",
             },
         )
         assert response.status_code in (200, 204)
-        headers = {k.lower(): v for k, v in response.headers.items()}
-        allow_methods = headers.get("access-control-allow-methods", "").lower()
-        for method in ("post", "patch", "delete"):
-            assert method in allow_methods, allow_methods
+    finally:
+        if original_override is None:
+            app.dependency_overrides.pop(require_admin, None)
+        else:
+            app.dependency_overrides[require_admin] = original_override
 
+def test_admin_tasks_head_request_returns_total_header(client: TestClient) -> None:
+    response = client.head(
+        "/api/admin/tasks",
+        headers={"Authorization": "Bearer token"},
+    )
+    assert response.status_code == 200
+    assert response.headers.get("x-total-count") == "1"
+
+if False:  # pragma: no cover - legacy integration tests kept for reference
     def test_create_admin_task_accepts_complete_payload(client: TestClient) -> None:
         payload = {
             "title": "Практическое задание №1",
