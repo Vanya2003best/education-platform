@@ -25,42 +25,6 @@ from app.utils.cache import cache_manager
 from app.utils.task_serializers import serialize_task, serialize_tasks
 from app.utils.task_filters import task_is_effectively_active
 router = APIRouter()
-ALLOW_ADMIN_TASK_METHODS = "GET, HEAD, OPTIONS, POST, PATCH, DELETE"
-
-def _build_admin_task_cors_headers(request: Request) -> dict[str, str]:
-    """Return CORS headers for admin task endpoints.
-
-    Browsers send a preflight request for the admin task UI because the
-    dashboard attaches an ``Authorization`` header.  Our API already has the
-    global ``CORSMiddleware`` enabled, but explicit ``OPTIONS`` routes bypass
-    its automatic response builder.  When that happened the browser never saw
-    the ``Access-Control-Allow-Origin`` header and blocked the real request.
-
-    To make the behaviour deterministic we synthesise the minimal header set
-    ourselves and mirror the requested Origin so that credentialed requests are
-    allowed.
-    """
-
-    requested_headers = request.headers.get(
-        "Access-Control-Request-Headers", "Authorization, Content-Type"
-    )
-    headers = {
-        "Allow": ALLOW_ADMIN_TASK_METHODS,
-        "Access-Control-Allow-Methods": ALLOW_ADMIN_TASK_METHODS,
-        "Access-Control-Allow-Headers": requested_headers,
-        "Access-Control-Expose-Headers": "X-Total-Count, X-Page, X-Per-Page",
-        "Access-Control-Max-Age": "600",
-    }
-
-    origin = request.headers.get("origin")
-    if origin:
-        headers["Access-Control-Allow-Origin"] = origin
-        headers["Access-Control-Allow-Credentials"] = "true"
-        headers["Vary"] = "Origin"
-    else:
-        headers["Access-Control-Allow-Origin"] = "*"
-
-    return headers
 @router.get("/dashboard", response_model=AdminDashboard)
 async def get_admin_dashboard(
         current_user: User = Depends(require_admin),
@@ -348,19 +312,11 @@ async def get_admin_tasks(
         )
 
     response.headers.update(total_header)
-    cors_headers = _build_admin_task_cors_headers(request)
-    for key in ("Allow", "Access-Control-Expose-Headers"):
-        if key in cors_headers:
-            response.headers.setdefault(key, cors_headers[key])
 
     if request.method == "HEAD":
         head_headers = dict(total_header)
-        head_headers.update({
-            "Allow": cors_headers.get("Allow", ALLOW_ADMIN_TASK_METHODS),
-            "Access-Control-Expose-Headers": cors_headers.get(
-                "Access-Control-Expose-Headers", "X-Total-Count"
-            ),
-        })
+        head_headers.setdefault("Allow", "GET, HEAD")
+        head_headers.setdefault("Access-Control-Expose-Headers", "X-Total-Count")
         return Response(status_code=status.HTTP_200_OK, headers=head_headers)
     return TaskListResponse(items=serialized, total=total)
 
@@ -395,34 +351,6 @@ async def head_admin_tasks(
         limit=limit,
         assigned_user_id=assigned_user_id,
     )
-
-def _build_admin_preflight_response(request: Request) -> Response:
-    """Return a shared 204 response for admin task preflight requests."""
-    return Response(
-        status_code=status.HTTP_204_NO_CONTENT,
-        headers=_build_admin_task_cors_headers(request),
-    )
-
-@router.options("/tasks", include_in_schema=False)
-async def admin_tasks_collection_preflight(request: Request) -> Response:
-    """Serve collection-level preflight requests without auth dependencies."""
-
-    return _build_admin_preflight_response(request)
-
-
-@router.options("/tasks/{path:path}", include_in_schema=False)
-async def admin_tasks_preflight(request: Request, path: Optional[str] = None) -> Response:
-    """Обрабатывать preflight-запросы для UI.
-
-    Старые версии Starlette (и FastAPI до 0.110) прекращали поиск маршрутов
-    после первого частичного совпадения.  Если ``OPTIONS``-маршрут
-    регистрировался раньше ``GET``-обработчика, запросы ``GET`` могли получать
-    ``405 Method Not Allowed`` даже при наличии правильного обработчика.  Чтобы
-    не зависеть от внутреннего порядка, мы регистрируем ``GET``-маршрут выше,
-    но оставляем общий preflight обработчик для вложенных путей.
-    """
-
-    return _build_admin_preflight_response(request)
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)
