@@ -17,14 +17,43 @@ from app.models import (
 )
 from app.schemas import (
     AdminDashboard, BroadcastMessage, AdminTaskCreate,
-    TaskResponse, TaskAssignmentRequest, AdminUserSummary, TaskListResponse,
+    TaskResponse, TaskAssignmentRequest, AdminUserSummary,
     TaskUpdate,
 )
 from app.auth import require_admin
 from app.utils.cache import cache_manager
+from app.utils.cors import build_preflight_response
 from app.utils.task_serializers import serialize_task, serialize_tasks
 from app.utils.task_filters import task_is_effectively_active
 router = APIRouter()
+async def _get_task_or_404(
+    db: AsyncSession,
+    task_id: int,
+    *,
+    eager_assignments: bool = False,
+) -> Task:
+    """Return a task instance or raise a 404 error.
+
+    Several admin endpoints (PATCH/DELETE/ASSIGN) were manually reimplementing the
+    same lookup logic which increases the odds of accidentally pointing at the
+    wrong table or schema.  Centralising the check guarantees that all
+    write-paths use the same query and error handling.
+    """
+
+    query = select(Task)
+    if eager_assignments:
+        query = query.options(selectinload(Task.assignments))
+
+    result = await db.execute(query.where(Task.id == task_id))
+    task = result.scalar_one_or_none()
+
+    if task is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Task not found",
+        )
+
+    return task
 @router.get("/dashboard", response_model=AdminDashboard)
 async def get_admin_dashboard(
         current_user: User = Depends(require_admin),
@@ -223,7 +252,7 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-@router.get("/tasks", response_model=TaskListResponse)
+@router.api_route("/tasks", methods=["GET", "HEAD"], response_model=List[TaskResponse])
 async def get_admin_tasks(
         request: Request,
         response: Response,
@@ -241,7 +270,6 @@ async def get_admin_tasks(
         ),
 ):
     """Получить список заданий для административной панели."""
-    print(f"Endpoint called: {request.url}")
     is_head_request = request.method.upper() == "HEAD"
     # Административный список должен показывать все задания, чтобы
     # администраторы могли управлять и «обычными» заданиями преподавателей,
@@ -312,62 +340,23 @@ async def get_admin_tasks(
         return head_response
 
     serialized = serialize_tasks(tasks)
-    user_agent = request.headers.get("user-agent", "").lower()
-    if user_agent.startswith("testclient"):
-        return JSONResponse(
-            content=[item.model_dump(mode="json") for item in serialized],
-            headers=total_header,
-        )
-
-    return TaskListResponse(items=serialized, total=total)
-
-def _build_admin_preflight_response(request: Request) -> Response:
-    origin = request.headers.get("origin") or "*"
-    request_headers = request.headers.get("access-control-request-headers")
-    allow_headers = request_headers or "Authorization, Content-Type"
-
-    headers = {
-        "Access-Control-Allow-Origin": origin,
-        "Access-Control-Allow-Methods": "GET, HEAD, POST, PATCH, DELETE, OPTIONS",
-        "Access-Control-Allow-Headers": allow_headers,
-        "Access-Control-Max-Age": "86400",
-    }
-
-    if origin != "*":
-        headers["Vary"] = "Origin"
-
-    return Response(status_code=status.HTTP_204_NO_CONTENT, headers=headers)
+    return JSONResponse(
+        content=[item.model_dump(mode="json") for item in serialized],
+        headers=total_header,
+    )
 
 
 @router.options("/tasks", include_in_schema=False)
 @router.options("/tasks/", include_in_schema=False)
 async def admin_tasks_collection_preflight(request: Request) -> Response:
-    return _build_admin_preflight_response(request)
-
-
-# HEAD-запросы должны явно вызывать обработчик для корректных заголовков
-router.add_api_route(
-    "/tasks",
-    get_admin_tasks,
-    methods=["HEAD"],
-    response_model=TaskListResponse,
-    include_in_schema=False,
-)
-
-
-# Поддерживаем /tasks/ как alias без необходимости редиректов
-router.add_api_route(
-    "/tasks/",
-    get_admin_tasks,
-    methods=["GET", "HEAD"],
-    response_model=TaskListResponse,
-    include_in_schema=False,
-)
+    allowed_methods = ("GET", "HEAD", "POST", "PATCH", "DELETE")
+    return build_preflight_response(request, allowed_methods)
 
 
 @router.options("/tasks/{path:path}", include_in_schema=False)
 async def admin_tasks_preflight(request: Request, path: Optional[str] = None) -> Response:
-    return _build_admin_preflight_response(request)
+    allowed_methods = ("GET", "HEAD", "POST", "PATCH", "DELETE")
+    return build_preflight_response(request, allowed_methods)
 
 
 
@@ -452,11 +441,7 @@ async def update_task(
             detail="Нет данных для обновления",
         )
 
-    result = await db.execute(select(Task).where(Task.id == task_id))
-    task = result.scalar_one_or_none()
-
-    if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    task = await _get_task_or_404(db, task_id)
 
     for field_name, value in update_payload.items():
         setattr(task, field_name, value)
@@ -479,11 +464,7 @@ async def delete_task(
     """Удалить задание и связанные назначения."""
     print(f"Endpoint called: {request.url}")
 
-    result = await db.execute(select(Task).where(Task.id == task_id))
-    task = result.scalar_one_or_none()
-
-    if not task:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
+    task = await _get_task_or_404(db, task_id, eager_assignments=True)
 
     await db.delete(task)
     await db.commit()
@@ -505,14 +486,7 @@ async def assign_task(
 ):
     """Назначить существующее задание выбранным пользователям"""
 
-    result = await db.execute(select(Task).where(Task.id == task_id))
-    task = result.scalar_one_or_none()
-
-    if not task:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Task not found",
-        )
+    task = await _get_task_or_404(db, task_id)
 
     result = await db.execute(
         select(User.id).where(User.id.in_(assignment.user_ids))

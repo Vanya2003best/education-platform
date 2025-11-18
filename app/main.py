@@ -29,6 +29,7 @@ from app.models import Base
 from app.utils.cache import cache_manager
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
+from app.utils.cors import ALLOWED_CORS_METHODS, build_preflight_response
 from app.utils.logger import setup_logging
 
 # Импорт роутеров
@@ -111,7 +112,7 @@ app = FastAPI(
 )
 
 # --- CORS настройки ---
-ALLOWED_CORS_METHODS = ["GET", "POST", "PATCH", "DELETE", "OPTIONS", "HEAD"]
+ALLOWED_CORS_METHODS = ["OPTIONS", "GET", "POST", "PATCH", "DELETE", "HEAD"]
 
 cors_kwargs = dict(
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
@@ -120,19 +121,24 @@ cors_kwargs = dict(
     expose_headers=["X-Total-Count", "X-Page", "X-Per-Page"],
 )
 
-effective_origins = list(getattr(settings, "effective_cors_origins", []) or [])
-required_local_origins = ("http://localhost:8000", "http://127.0.0.1:8000")
+effective_origins = set(getattr(settings, "effective_cors_origins", []) or [])
+required_local_origins = {"http://localhost:8000", "http://127.0.0.1:8000"}
 
+allow_origins = sorted(effective_origins.union(required_local_origins)) or list(required_local_origins)
+allow_origins: list[str] = []
 if effective_origins:
-    for required_origin in required_local_origins:
-        if required_origin not in effective_origins:
-            effective_origins.append(required_origin)
+    allow_origins.extend(effective_origins)
+for required_origin in required_local_origins:
+    if required_origin not in allow_origins:
+        allow_origins.append(required_origin)
 
-    cors_kwargs["allow_origins"] = effective_origins
-elif settings.cors_allow_all:
-    cors_kwargs["allow_origin_regex"] = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
+if allow_origins:
+    cors_kwargs["allow_origins"] = allow_origins
 else:
     cors_kwargs["allow_origins"] = list(required_local_origins)
+
+if settings.cors_allow_all:
+    cors_kwargs["allow_origin_regex"] = r"https?://(localhost|127\.0\.0\.1)(:\d+)?$"
 
 app.add_middleware(CORSMiddleware, **cors_kwargs)
 
@@ -143,7 +149,6 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 if getattr(settings, "RATE_LIMIT_REQUESTS", 0):
     app.add_middleware(RateLimitMiddleware, max_requests=settings.RATE_LIMIT_REQUESTS)
 
-from fastapi import Request
 from fastapi.responses import JSONResponse
 import traceback, logging
 
@@ -204,6 +209,12 @@ if settings.PROMETHEUS_ENABLED:
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Обработчик HTTP исключений"""
+    if request.method == "OPTIONS" and exc.status_code in {
+        status.HTTP_404_NOT_FOUND,
+        status.HTTP_405_METHOD_NOT_ALLOWED,
+    }:
+        return build_preflight_response(request)
+
     headers = exc.headers or None
     return JSONResponse(
         status_code=exc.status_code,
