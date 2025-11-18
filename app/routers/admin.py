@@ -252,24 +252,22 @@ async def grant_coins(
         "message": f"Начислено {amount} монет",
         "new_balance": user.coins
     }
-@router.api_route("/tasks", methods=["GET", "HEAD"], response_model=List[TaskResponse])
-async def get_admin_tasks(
+async def _list_admin_tasks(
         request: Request,
         response: Response,
-        current_user: User = Depends(require_admin),
-        db: AsyncSession = Depends(get_async_db),
-        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
-        subject: Optional[str] = Query(None, max_length=50),
-        difficulty: Optional[int] = Query(None, ge=1, le=5),
-        task_type: Optional[str] = Query(None, max_length=50),
-        search: Optional[str] = Query(None, max_length=200),
-        skip: int = Query(0, ge=0),
-        limit: int = Query(50, ge=1, le=200),
-        assigned_user_id: Optional[int] = Query(
-            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
-        ),
-):
-    """Получить список заданий для административной панели."""
+        current_user: User,
+        db: AsyncSession,
+        include_inactive: bool,
+        subject: Optional[str],
+        difficulty: Optional[int],
+        task_type: Optional[str],
+        search: Optional[str],
+        skip: int,
+        limit: int,
+        assigned_user_id: Optional[int],
+) -> Response:
+    """Internal helper returning the admin task collection response."""
+
     is_head_request = request.method.upper() == "HEAD"
     # Административный список должен показывать все задания, чтобы
     # администраторы могли управлять и «обычными» заданиями преподавателей,
@@ -346,18 +344,136 @@ async def get_admin_tasks(
     )
 
 
-# FastAPI automatically redirects between "/tasks" and "/tasks/" when
-# ``redirect_slashes`` is enabled, but the admin panel historically accessed
-# both variants directly.  Register an explicit trailing-slash clone so that
-# route ordering (and any custom OPTIONS handlers) can never shadow the GET
-# handler and cause a 405 response.
-router.add_api_route(
-    "/tasks/",
-    get_admin_tasks,
-    methods=["GET", "HEAD"],
-    response_model=List[TaskResponse],
-    include_in_schema=False,
-)
+@router.get("/tasks", response_model=List[TaskResponse])
+async def get_admin_tasks(
+        request: Request,
+        response: Response,
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db),
+        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
+        subject: Optional[str] = Query(None, max_length=50),
+        difficulty: Optional[int] = Query(None, ge=1, le=5),
+        task_type: Optional[str] = Query(None, max_length=50),
+        search: Optional[str] = Query(None, max_length=200),
+        skip: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),
+        assigned_user_id: Optional[int] = Query(
+            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
+        ),
+):
+    return await _list_admin_tasks(
+        request,
+        response,
+        current_user,
+        db,
+        include_inactive,
+        subject,
+        difficulty,
+        task_type,
+        search,
+        skip,
+        limit,
+        assigned_user_id,
+    )
+
+
+@router.get("/tasks/", response_model=List[TaskResponse], include_in_schema=False)
+async def get_admin_tasks_trailing_slash(
+        request: Request,
+        response: Response,
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db),
+        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
+        subject: Optional[str] = Query(None, max_length=50),
+        difficulty: Optional[int] = Query(None, ge=1, le=5),
+        task_type: Optional[str] = Query(None, max_length=50),
+        search: Optional[str] = Query(None, max_length=200),
+        skip: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),
+        assigned_user_id: Optional[int] = Query(
+            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
+        ),
+):
+    return await _list_admin_tasks(
+        request,
+        response,
+        current_user,
+        db,
+        include_inactive,
+        subject,
+        difficulty,
+        task_type,
+        search,
+        skip,
+        limit,
+        assigned_user_id,
+    )
+
+
+@router.head("/tasks", include_in_schema=False)
+async def head_admin_tasks(
+        request: Request,
+        response: Response,
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db),
+        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
+        subject: Optional[str] = Query(None, max_length=50),
+        difficulty: Optional[int] = Query(None, ge=1, le=5),
+        task_type: Optional[str] = Query(None, max_length=50),
+        search: Optional[str] = Query(None, max_length=200),
+        skip: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),
+        assigned_user_id: Optional[int] = Query(
+            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
+        ),
+):
+    return await _list_admin_tasks(
+        request,
+        response,
+        current_user,
+        db,
+        include_inactive,
+        subject,
+        difficulty,
+        task_type,
+        search,
+        skip,
+        limit,
+        assigned_user_id,
+    )
+
+
+@router.head("/tasks/", include_in_schema=False)
+async def head_admin_tasks_trailing_slash(
+        request: Request,
+        response: Response,
+        current_user: User = Depends(require_admin),
+        db: AsyncSession = Depends(get_async_db),
+        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
+        subject: Optional[str] = Query(None, max_length=50),
+        difficulty: Optional[int] = Query(None, ge=1, le=5),
+        task_type: Optional[str] = Query(None, max_length=50),
+        search: Optional[str] = Query(None, max_length=200),
+        skip: int = Query(0, ge=0),
+        limit: int = Query(50, ge=1, le=200),
+        assigned_user_id: Optional[int] = Query(
+            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
+        ),
+):
+    return await _list_admin_tasks(
+        request,
+        response,
+        current_user,
+        db,
+        include_inactive,
+        subject,
+        difficulty,
+        task_type,
+        search,
+        skip,
+        limit,
+        assigned_user_id,
+    )
 
 
 @router.options("/tasks", include_in_schema=False)
