@@ -346,6 +346,20 @@ async def get_admin_tasks(
     )
 
 
+# FastAPI automatically redirects between "/tasks" and "/tasks/" when
+# ``redirect_slashes`` is enabled, but the admin panel historically accessed
+# both variants directly.  Register an explicit trailing-slash clone so that
+# route ordering (and any custom OPTIONS handlers) can never shadow the GET
+# handler and cause a 405 response.
+router.add_api_route(
+    "/tasks/",
+    get_admin_tasks,
+    methods=["GET", "HEAD"],
+    response_model=List[TaskResponse],
+    include_in_schema=False,
+)
+
+
 @router.options("/tasks", include_in_schema=False)
 @router.options("/tasks/", include_in_schema=False)
 async def admin_tasks_collection_preflight(request: Request) -> Response:

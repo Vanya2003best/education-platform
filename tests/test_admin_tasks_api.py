@@ -9,6 +9,9 @@ import sys
 import pytest
 from fastapi.testclient import TestClient
 from unittest.mock import AsyncMock
+from sqlalchemy.sql import Select
+from sqlalchemy.sql.elements import BindParameter, BinaryExpression
+from sqlalchemy.sql import operators as sql_operators
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
@@ -119,8 +122,41 @@ class DummySession:
                 return task
         return None
 
+    def _resolve_bound_value(self, expression: Any) -> Any:
+        if expression is None:
+            return None
+        if isinstance(expression, BindParameter):
+            return expression.value
+        if hasattr(expression, "value"):
+            return getattr(expression, "value")
+        nested = getattr(expression, "element", None)
+        if nested is expression:
+            return None
+        if nested is not None:
+            return self._resolve_bound_value(nested)
+        return None
+
+    def _filter_tasks(self, statement: Any) -> list[Any]:
+        if not isinstance(statement, Select):
+            return list(self._tasks)
+
+        filtered = list(self._tasks)
+        for criterion in getattr(statement, "_where_criteria", ()):  # type: ignore[attr-defined]
+            if not isinstance(criterion, BinaryExpression):
+                continue
+            left = getattr(criterion, "left", None)
+            operator = getattr(criterion, "operator", None)
+            if getattr(left, "key", None) != "id" or operator is not sql_operators.eq:
+                continue
+            value = self._resolve_bound_value(getattr(criterion, "right", None))
+            if value is None:
+                continue
+            filtered = [task for task in filtered if getattr(task, "id", None) == value]
+        return filtered
+
     async def execute(self, *args: Any, **kwargs: Any) -> DummyResult:
-        return DummyResult(self._tasks)
+        statement = args[0] if args else None
+        return DummyResult(self._filter_tasks(statement))
 
     def add(self, obj: Any) -> None:
         if getattr(obj, "id", None) in (None, 0):
@@ -377,6 +413,40 @@ def test_admin_can_delete_task(client: TestClient) -> None:
     )
     assert follow_up.status_code == 200
     assert follow_up.json() == []
+
+def test_admin_delete_missing_task_returns_404(client: TestClient) -> None:
+    response = client.delete(
+        "/api/admin/tasks/999",
+        headers={"Authorization": "Bearer token"},
+    )
+    assert response.status_code == 404
+    payload = response.json()
+    message = payload.get("detail") or payload.get("error", {}).get("message")
+    assert message == "Task not found"
+
+
+def test_admin_can_update_task(client: TestClient) -> None:
+    response = client.patch(
+        "/api/admin/tasks/42",
+        headers={"Authorization": "Bearer token"},
+        json={"title": "Обновлённое задание", "difficulty": 4},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["title"] == "Обновлённое задание"
+    assert data["difficulty"] == 4
+
+
+def test_admin_update_missing_task_returns_404(client: TestClient) -> None:
+    response = client.patch(
+        "/api/admin/tasks/777",
+        headers={"Authorization": "Bearer token"},
+        json={"title": "Не существует"},
+    )
+    assert response.status_code == 404
+    payload = response.json()
+    message = payload.get("detail") or payload.get("error", {}).get("message")
+    assert message == "Task not found"
 
 if False:  # pragma: no cover - legacy integration tests kept for reference
     def test_create_admin_task_accepts_complete_payload(client: TestClient) -> None:
