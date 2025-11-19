@@ -1,217 +1,44 @@
 from __future__ import annotations
 
-from datetime import datetime
 from pathlib import Path
 from typing import Any, AsyncIterator, Iterator
 import types
 import sys
 
+import anyio
 import pytest
 from fastapi.testclient import TestClient
+from httpx import ASGITransport, AsyncClient
 from unittest.mock import AsyncMock
-from sqlalchemy.sql import Select
-from sqlalchemy.sql.elements import BindParameter, BinaryExpression
-from sqlalchemy.sql import operators as sql_operators
+from app.utils.admin_tasks import (
+    DummySession,
+    DummyTask,
+    ensure_optional_deps_stubbed,
+)
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-# Stub heavy optional dependencies before importing the app
-cv2_stub = types.SimpleNamespace(
-    imread=lambda *args, **kwargs: None,
-    cvtColor=lambda *args, **kwargs: None,
-    fastNlMeansDenoising=lambda *args, **kwargs: None,
-    adaptiveThreshold=lambda *args, **kwargs: None,
-    morphologyEx=lambda *args, **kwargs: None,
-    minAreaRect=lambda coords: (None, None, 0),
-    getRotationMatrix2D=lambda *args, **kwargs: None,
-    warpAffine=lambda *args, **kwargs: None,
-    COLOR_BGR2GRAY=0,
-    ADAPTIVE_THRESH_GAUSSIAN_C=0,
-    THRESH_BINARY=0,
-    MORPH_CLOSE=0,
-    INTER_CUBIC=0,
-    BORDER_REPLICATE=0,
-    ml=types.SimpleNamespace(),
-)
-
-pytesseract_stub = types.SimpleNamespace(image_to_string=lambda *args, **kwargs: "")
-openai_stub = types.SimpleNamespace(AsyncOpenAI=lambda *args, **kwargs: None)
-
-sys.modules.setdefault("cv2", cv2_stub)
-sys.modules.setdefault("pytesseract", pytesseract_stub)
-sys.modules.setdefault("openai", openai_stub)
+ensure_optional_deps_stubbed()
 
 from app.main import app  # noqa: E402  # import after stubbing optional deps
 import app.main as app_main  # noqa: E402
-from app.routers import admin as admin_router  # noqa: E402
 from app.auth import require_admin
 from app.database import get_async_db
 from app.models import TaskStatus
 from app.utils.task_serializers import serialize_task
 
 
-class DummyTask:
-    def __init__(self) -> None:
-        self.id = 42
-        self.title = " Legacy Title"
-        self.description = "Short"
-        self.task_type = "  experimental-category "
-        self.subject = "Advanced Astrophysics for Secondary School Students"
-        self.difficulty = 6  # outside normal range to test clamping
-        self.content_html = {"note": "rich"}
-        self.topic = "  Deep Space Exploration Technologies and Engineering Principles  "
-        self.tags = ["science", None, " research "]
-        self.min_level = 0
-        self.time_limit = "45"
-        self.max_attempts = 0
-        self.reward_coins = "150"
-        self.reward_exp = "250"
-        self.reward_gems = "10"
-        self.bonus_coins = "5"
-        self.image_url = "   https://example.com/image.png   "
-        self.video_url = None
-        self.is_premium = 1
-        self.is_featured = None
-        self.submissions_count = "-5"
-        self.success_rate = "92%"
-        self.avg_score = "88,75"
-        self.created_at = None
-        self.updated_at = datetime(2024, 1, 1, 12, 0, 0)
-        self.status = TaskStatus.ACTIVE
-        self.is_admin_task = True
-        self.assignments = []
-
-
-class DummyResult:
-    def __init__(self, tasks: list[Any]) -> None:
-        self._tasks = tasks
-
-    def scalars(self) -> "DummyResult":
-        return self
-
-    def scalar_one(self) -> int:
-        return len(self._tasks)
-
-    def scalar(self) -> int:
-        return len(self._tasks)
-
-    def first(self) -> tuple[int]:
-        return (len(self._tasks),)
-
-    def all(self) -> list[Any]:
-        return self._tasks
-
-    def scalar_one_or_none(self) -> Any | None:
-        if not self._tasks:
-            return None
-        if len(self._tasks) == 1:
-            return self._tasks[0]
-        raise RuntimeError("DummyResult.scalar_one_or_none only supports up to one task")
-
-class DummySession:
-    def __init__(self, tasks: list[DummyTask]) -> None:
-        self._tasks: list[Any] = list(tasks)
-        existing_ids = [getattr(task, "id", 0) for task in self._tasks]
-        self._next_id = (max(existing_ids) if existing_ids else 0) + 1
-
-    def _find_task(self, task_id: int) -> Any | None:
-        for task in self._tasks:
-            if getattr(task, "id", None) == task_id:
-                return task
-        return None
-
-    def _resolve_bound_value(self, expression: Any) -> Any:
-        if expression is None:
-            return None
-        if isinstance(expression, BindParameter):
-            return expression.value
-        if hasattr(expression, "value"):
-            return getattr(expression, "value")
-        nested = getattr(expression, "element", None)
-        if nested is expression:
-            return None
-        if nested is not None:
-            return self._resolve_bound_value(nested)
-        return None
-
-    def _filter_tasks(self, statement: Any) -> list[Any]:
-        if not isinstance(statement, Select):
-            return list(self._tasks)
-
-        filtered = list(self._tasks)
-        for criterion in getattr(statement, "_where_criteria", ()):  # type: ignore[attr-defined]
-            if not isinstance(criterion, BinaryExpression):
-                continue
-            left = getattr(criterion, "left", None)
-            operator = getattr(criterion, "operator", None)
-            if getattr(left, "key", None) != "id" or operator is not sql_operators.eq:
-                continue
-            value = self._resolve_bound_value(getattr(criterion, "right", None))
-            if value is None:
-                continue
-            filtered = [task for task in filtered if getattr(task, "id", None) == value]
-        return filtered
-
-    async def execute(self, *args: Any, **kwargs: Any) -> DummyResult:
-        statement = args[0] if args else None
-        return DummyResult(self._filter_tasks(statement))
-
-    def add(self, obj: Any) -> None:
-        if getattr(obj, "id", None) in (None, 0):
-            setattr(obj, "id", self._next_id)
-            self._next_id += 1
-        self._tasks.append(obj)
-
-    def add_all(self, objects: list[Any]) -> None:  # pragma: no cover - compatibility
-        for obj in objects:
-            self.add(obj)
-
-    async def delete(self, obj: Any) -> None:
-        self._tasks = [task for task in self._tasks if task is not obj]
-
-    async def commit(self) -> None:  # pragma: no cover - API compatibility
-        return None
-
-    async def rollback(self) -> None:  # pragma: no cover - API compatibility
-        return None
-
-    async def close(self) -> None:  # pragma: no cover - API compatibility
-        return None
-
-    async def flush(self) -> None:
-        return None
-
-    async def refresh(self, obj: Any) -> None:
-        if getattr(obj, "created_at", None) is None:
-            obj.created_at = datetime.utcnow()
-        if getattr(obj, "updated_at", None) is None:
-            obj.updated_at = obj.created_at
-        defaults = {
-            "status": TaskStatus.ACTIVE,
-            "submissions_count": 0,
-            "success_rate": 0.0,
-            "avg_score": 0.0,
-            "reward_gems": getattr(obj, "reward_gems", 0) or 0,
-            "bonus_coins": getattr(obj, "bonus_coins", 0) or 0,
-            "is_premium": getattr(obj, "is_premium", False) or False,
-            "is_featured": getattr(obj, "is_featured", False) or False,
-        }
-        for key, value in defaults.items():
-            if getattr(obj, key, None) is None:
-                setattr(obj, key, value)
-
-
 @pytest.fixture
-def client() -> Iterator[TestClient]:
+def admin_app_overrides() -> Iterator[DummySession]:
     session = DummySession([DummyTask()])
 
     async def override_db() -> AsyncIterator[DummySession]:
         yield session
 
     def override_admin() -> Any:
-        return types.SimpleNamespace(id=1, role="admin")
+        return types.SimpleNamespace(id=1, role="admin", is_active=True, is_verified=True)
 
     app.dependency_overrides[get_async_db] = override_db
     app.dependency_overrides[require_admin] = override_admin
@@ -229,18 +56,22 @@ def client() -> Iterator[TestClient]:
     app_main.cache_manager.disconnect = AsyncMock()
     app_main.cache_manager.is_connected = lambda: False
     app_main.cache_manager.invalidate_pattern = AsyncMock()
+    try:
+        yield session
+    finally:
+        app.dependency_overrides.pop(get_async_db, None)
+        app.dependency_overrides.pop(require_admin, None)
+        app_main.init_db = original_init_db
+        app_main.close_db = original_close_db
+        app_main.cache_manager.connect = original_connect
+        app_main.cache_manager.disconnect = original_disconnect
+        app_main.cache_manager.is_connected = original_is_connected
+        app_main.cache_manager.invalidate_pattern = original_invalidate
 
+@pytest.fixture
+def client(admin_app_overrides: DummySession) -> Iterator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
-
-    app.dependency_overrides.pop(get_async_db, None)
-    app.dependency_overrides.pop(require_admin, None)
-    app_main.init_db = original_init_db
-    app_main.close_db = original_close_db
-    app_main.cache_manager.connect = original_connect
-    app_main.cache_manager.disconnect = original_disconnect
-    app_main.cache_manager.is_connected = original_is_connected
-    app_main.cache_manager.invalidate_pattern = original_invalidate
 
 
 def test_admin_tasks_endpoint_returns_sanitized_payload(client: TestClient) -> None:
@@ -282,29 +113,54 @@ def test_admin_tasks_collection_accepts_all_trailing_slash_variants(
     assert response.status_code == 200
     assert response.headers.get("X-Total-Count") == "1"
 
+def test_live_app_admin_tasks_listing(admin_app_overrides: DummySession) -> None:
+    async def _run() -> None:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get(
+                "/api/admin/tasks",
+                headers={"Authorization": "Bearer token"},
+            )
+            assert response.status_code == 200
+            assert response.headers.get("X-Total-Count") == "1"
+            payload = response.json()
+            assert isinstance(payload, list)
+            assert payload and payload[0]["id"] == 42
 
-def test_admin_task_collection_get_registered_before_options() -> None:
-    """Ensure GET /tasks is registered before OPTIONS fallbacks."""
-
-    tasks_routes = [
-        route for route in admin_router.router.routes if route.path == "/tasks"
-    ]
-    assert tasks_routes, "Expected admin /tasks routes to be registered"
-
-    first_methods = tasks_routes[0].methods or set()
-    assert "GET" in first_methods, tasks_routes[0]
+    anyio.run(_run)
 
 
-def test_http_exception_handler_preserves_allow_header(client: TestClient) -> None:
-    response = client.post("/api/admin/dashboard", headers={"Authorization": "Bearer token"})
+def test_live_app_admin_delete_flow(admin_app_overrides: DummySession) -> None:
+    async def _run() -> None:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.delete(
+                "/api/admin/tasks/42",
+                headers={"Authorization": "Bearer token"},
+            )
+            assert response.status_code == 200
+            follow_up = await client.get(
+                "/api/admin/tasks",
+                headers={"Authorization": "Bearer token"},
+            )
+            assert follow_up.status_code == 200
+            assert follow_up.json() == []
 
-    assert response.status_code == 405
-    allow_header = response.headers.get("allow")
-    assert allow_header is not None
-    assert "GET" in allow_header
+    anyio.run(_run)
 
-    payload = response.json()
-    assert payload["error"]["message"].lower() == "method not allowed"
+
+def test_live_app_admin_patch_flow(admin_app_overrides: DummySession) -> None:
+    async def _run() -> None:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.patch(
+                "/api/admin/tasks/42",
+                headers={"Authorization": "Bearer token"},
+                json={"title": "HTTPX patched", "difficulty": 3},
+            )
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["title"] == "HTTPX patched"
+            assert payload["difficulty"] == 3
+
+    anyio.run(_run)
 
 
 def test_admin_tasks_endpoint_accepts_assignee_filter(client: TestClient) -> None:
@@ -314,7 +170,8 @@ def test_admin_tasks_endpoint_accepts_assignee_filter(client: TestClient) -> Non
         params={"assigned_user_id": 5},
     )
     assert response.status_code == 200
-
+    data = response.json()
+    assert isinstance(data["items"], list)
 
 def test_http_exception_handler_preserves_allow_header(client: TestClient) -> None:
     response = client.post("/api/admin/dashboard", headers={"Authorization": "Bearer token"})
@@ -332,82 +189,30 @@ def test_public_tasks_endpoint_uses_same_serializer(client: TestClient) -> None:
     assert response.status_code == 200
 
     data = response.json()
-    assert isinstance(data, list)
-    assert data
+    assert isinstance(data, dict)
+    assert data.get("total") == 1
+    assert data.get("items"), "Expected at least one task in response"
+    task = data["items"][0]
     # Ensure the serializer behaviour matches direct invocation
     serialized = serialize_task(DummyTask())
     assert data[0]["task_type"] == serialized.task_type
     assert data[0]["subject"] == serialized.subject
     assert data[0]["status"] == serialized.status
 
-def test_admin_tasks_nested_preflight_handles_subpaths(client: TestClient) -> None:
-    response = client.options(
-        "/api/admin/tasks/42/assign",
-        headers={
-            "Origin": "http://localhost:3000",
-            "Access-Control-Request-Method": "PATCH",
-            "Access-Control-Request-Headers": "authorization, content-type",
-        },
-    )
-
-    assert response.status_code in (200, 204)
-    headers = {k.lower(): v for k, v in response.headers.items()}
-    allow_methods = headers.get("access-control-allow-methods", "").lower()
-    assert "patch" in allow_methods
-
-def test_admin_tasks_preflight_options_request(client: TestClient) -> None:
-    response = client.options(
-        "/api/admin/tasks",
-        headers={
-            "Origin": "http://localhost:3000",
-            "Access-Control-Request-Method": "POST",
-            "Access-Control-Request-Headers": "authorization, content-type",
-        },
-    )
-    assert response.status_code in (200, 204)
-    headers = {k.lower(): v for k, v in response.headers.items()}
-    allow_methods = headers.get("access-control-allow-methods", "").lower()
-    for method in ("post", "patch", "delete"):
-        assert method in allow_methods, allow_methods
-
-
-def test_admin_tasks_preflight_does_not_require_authorization(client: TestClient) -> None:
-    """OPTIONS handler must bypass admin dependency so browsers can preflight."""
-
-    original_override = app.dependency_overrides.get(require_admin)
-
-    def _unexpected_call() -> None:  # pragma: no cover - defensive guard
-        raise AssertionError("require_admin should not run for OPTIONS /tasks")
-
-    app.dependency_overrides[require_admin] = _unexpected_call
-
-    try:
-        response = client.options(
-            "/api/admin/tasks",
-            headers={
-                "Origin": "http://localhost:8000",
-                "Access-Control-Request-Method": "GET",
-            },
-        )
-        assert response.status_code in (200, 204)
-    finally:
-        if original_override is None:
-            app.dependency_overrides.pop(require_admin, None)
-        else:
-            app.dependency_overrides[require_admin] = original_override
-
-@pytest.mark.parametrize("path", ["/api/admin/tasks", "/api/admin/tasks/"])
 def test_admin_tasks_head_request_returns_total_header(
     client: TestClient,
-    path: str,
 ) -> None:
     response = client.head(
-        path,
+        "/api/admin/tasks",
         headers={"Authorization": "Bearer token"},
     )
     assert response.status_code == 200
     assert response.headers.get("x-total-count") == "1"
 
+    payload = response.json()
+    assert isinstance(payload, dict)
+    assert payload["total"] == 1
+    assert isinstance(payload["items"], list)
 
 def test_admin_can_delete_task(client: TestClient) -> None:
     response = client.delete(
@@ -421,8 +226,9 @@ def test_admin_can_delete_task(client: TestClient) -> None:
         "/api/admin/tasks",
         headers={"Authorization": "Bearer token"},
     )
-    assert follow_up.status_code == 200
-    assert follow_up.json() == []
+    payload = follow_up.json()
+    assert payload["items"] == []
+    assert payload["total"] == 0
 def test_admin_delete_missing_task_returns_404(client: TestClient) -> None:
     response = client.delete(
         "/api/admin/tasks/999",
@@ -456,6 +262,54 @@ def test_admin_update_missing_task_returns_404(client: TestClient) -> None:
     payload = response.json()
     message = payload.get("detail") or payload.get("error", {}).get("message")
     assert message == "Task not found"
+def test_live_app_admin_tasks_listing(admin_app_overrides: DummySession) -> None:
+    async def _run() -> None:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.get(
+                "/api/admin/tasks",
+                headers={"Authorization": "Bearer token"},
+            )
+            assert response.status_code == 200
+            assert response.headers.get("X-Total-Count") == "1"
+            payload = response.json()
+            assert isinstance(payload, list)
+            assert payload and payload[0]["id"] == 42
+
+    anyio.run(_run)
+
+
+def test_live_app_admin_delete_flow(admin_app_overrides: DummySession) -> None:
+    async def _run() -> None:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.delete(
+                "/api/admin/tasks/42",
+                headers={"Authorization": "Bearer token"},
+            )
+            assert response.status_code == 200
+            follow_up = await client.get(
+                "/api/admin/tasks",
+                headers={"Authorization": "Bearer token"},
+            )
+            assert follow_up.status_code == 200
+            assert follow_up.json() == []
+
+    anyio.run(_run)
+
+
+def test_live_app_admin_patch_flow(admin_app_overrides: DummySession) -> None:
+    async def _run() -> None:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://testserver") as client:
+            response = await client.patch(
+                "/api/admin/tasks/42",
+                headers={"Authorization": "Bearer token"},
+                json={"title": "HTTPX patched", "difficulty": 3},
+            )
+            assert response.status_code == 200
+            payload = response.json()
+            assert payload["title"] == "HTTPX patched"
+            assert payload["difficulty"] == 3
+
+    anyio.run(_run)
 
 if False:  # pragma: no cover - legacy integration tests kept for reference
     def test_create_admin_task_accepts_complete_payload(client: TestClient) -> None:

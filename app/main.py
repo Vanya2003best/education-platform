@@ -12,7 +12,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.encoders import jsonable_encoder
 from collections.abc import Mapping
 from fastapi.encoders import jsonable_encoder
+from typing import Any
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.routing import Match
 from contextlib import asynccontextmanager
 import uvicorn
 import os
@@ -29,7 +31,6 @@ from app.models import Base
 from app.utils.cache import cache_manager
 from app.middleware.logging import LoggingMiddleware
 from app.middleware.rate_limit import RateLimitMiddleware
-from app.utils.cors import ALLOWED_CORS_METHODS, build_preflight_response
 from app.utils.logger import setup_logging
 
 # Импорт роутеров
@@ -112,11 +113,10 @@ app = FastAPI(
 )
 
 # --- CORS настройки ---
-ALLOWED_CORS_METHODS = ["OPTIONS", "GET", "POST", "PATCH", "DELETE", "HEAD"]
 
 cors_kwargs = dict(
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
-    allow_methods=ALLOWED_CORS_METHODS,
+    allow_methods=["OPTIONS", "GET", "POST", "PATCH", "DELETE", "HEAD"],
     allow_headers=["*"],
     expose_headers=["X-Total-Count", "X-Page", "X-Per-Page"],
 )
@@ -205,17 +205,52 @@ if settings.PROMETHEUS_ENABLED:
     app.mount("/metrics", metrics_app)
 
 
+def _describe_route_matches(request: Request) -> list[dict[str, Any]]:
+    """Return router matches for debugging 404/405 issues."""
+
+    scope = dict(request.scope)
+    scope.setdefault("path", request.url.path)
+    scope.setdefault("method", request.method)
+
+    matches: list[dict[str, Any]] = []
+    for route in request.app.router.routes:
+        matcher = getattr(route, "matches", None)
+        if matcher is None:
+            continue
+        try:
+            match, _ = matcher(scope)
+        except Exception:  # pragma: no cover - defensive logging helper
+            continue
+        if match is Match.NONE:
+            continue
+        methods = sorted(route.methods or []) if getattr(route, "methods", None) else []
+        matches.append(
+            {
+                "path": getattr(route, "path", None),
+                "methods": methods,
+                "match": match.name,
+                "name": getattr(route, "name", None),
+            }
+        )
+    return matches
+
+
 # Обработчики ошибок
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException):
     """Обработчик HTTP исключений"""
-    if request.method == "OPTIONS" and exc.status_code in {
-        status.HTTP_404_NOT_FOUND,
-        status.HTTP_405_METHOD_NOT_ALLOWED,
-    }:
-        return build_preflight_response(request)
-
     headers = exc.headers or None
+    route_matches = _describe_route_matches(request)
+    logger.warning(
+        "HTTPException encountered",
+        extra={
+            "status_code": exc.status_code,
+            "method": request.method,
+            "path": request.url.path,
+            "detail": exc.detail,
+            "matches": route_matches,
+        },
+    )
     return JSONResponse(
         status_code=exc.status_code,
         content={

@@ -1,8 +1,8 @@
 """
 API для административных функций
 """
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status, Query, Response, Request
-from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, delete, update, and_, or_
 from sqlalchemy.orm import selectinload
@@ -18,14 +18,14 @@ from app.models import (
 from app.schemas import (
     AdminDashboard, BroadcastMessage, AdminTaskCreate,
     TaskResponse, TaskAssignmentRequest, AdminUserSummary,
-    TaskUpdate,
+    TaskUpdate, TaskListResponse,
 )
 from app.auth import require_admin
 from app.utils.cache import cache_manager
-from app.utils.cors import build_preflight_response
 from app.utils.task_serializers import serialize_task, serialize_tasks
 from app.utils.task_filters import task_is_effectively_active
 router = APIRouter()
+logger = logging.getLogger(__name__)
 async def _get_task_or_404(
     db: AsyncSession,
     task_id: int,
@@ -253,7 +253,6 @@ async def grant_coins(
         "new_balance": user.coins
     }
 async def _list_admin_tasks(
-        request: Request,
         response: Response,
         current_user: User,
         db: AsyncSession,
@@ -265,10 +264,23 @@ async def _list_admin_tasks(
         skip: int,
         limit: int,
         assigned_user_id: Optional[int],
-) -> Response:
+) -> TaskListResponse:
     """Internal helper returning the admin task collection response."""
 
-    is_head_request = request.method.upper() == "HEAD"
+    logger.info(
+        "Admin task list requested",
+        extra={
+            "user_id": getattr(current_user, "id", None),
+            "include_inactive": include_inactive,
+            "subject": subject,
+            "difficulty": difficulty,
+            "task_type": task_type,
+            "search": search,
+            "skip": skip,
+            "limit": limit,
+            "assigned_user_id": assigned_user_id,
+        },
+    )
     # Административный список должен показывать все задания, чтобы
     # администраторы могли управлять и «обычными» заданиями преподавателей,
     # и собственными заданиями. Ранее здесь был фильтр только по
@@ -332,21 +344,22 @@ async def _list_admin_tasks(
     total_header = {"X-Total-Count": str(total)}
     response.headers.update(total_header)
 
-    if is_head_request:
-        head_response = Response(status_code=status.HTTP_200_OK)
-        head_response.headers.update(response.headers)
-        return head_response
+    logger.info(
+        "Admin task list completed",
+        extra={
+            "path": request.url.path,
+            "method": request.method,
+            "user_id": getattr(current_user, "id", None),
+            "total": total,
+            "is_head": is_head_request,
+        },
+    )
 
     serialized = serialize_tasks(tasks)
-    return JSONResponse(
-        content=[item.model_dump(mode="json") for item in serialized],
-        headers=total_header,
-    )
+    return TaskListResponse(items=serialized, total=total)
 
-
-@router.get("/tasks", response_model=List[TaskResponse])
+@router.api_route("/tasks", methods=["GET", "HEAD"], response_model=TaskListResponse)
 async def get_admin_tasks(
-        request: Request,
         response: Response,
         current_user: User = Depends(require_admin),
         db: AsyncSession = Depends(get_async_db),
@@ -362,7 +375,6 @@ async def get_admin_tasks(
         ),
 ):
     return await _list_admin_tasks(
-        request,
         response,
         current_user,
         db,
@@ -375,119 +387,6 @@ async def get_admin_tasks(
         limit,
         assigned_user_id,
     )
-
-
-@router.get("/tasks/", response_model=List[TaskResponse], include_in_schema=False)
-async def get_admin_tasks_trailing_slash(
-        request: Request,
-        response: Response,
-        current_user: User = Depends(require_admin),
-        db: AsyncSession = Depends(get_async_db),
-        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
-        subject: Optional[str] = Query(None, max_length=50),
-        difficulty: Optional[int] = Query(None, ge=1, le=5),
-        task_type: Optional[str] = Query(None, max_length=50),
-        search: Optional[str] = Query(None, max_length=200),
-        skip: int = Query(0, ge=0),
-        limit: int = Query(50, ge=1, le=200),
-        assigned_user_id: Optional[int] = Query(
-            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
-        ),
-):
-    return await _list_admin_tasks(
-        request,
-        response,
-        current_user,
-        db,
-        include_inactive,
-        subject,
-        difficulty,
-        task_type,
-        search,
-        skip,
-        limit,
-        assigned_user_id,
-    )
-
-
-@router.head("/tasks", include_in_schema=False)
-async def head_admin_tasks(
-        request: Request,
-        response: Response,
-        current_user: User = Depends(require_admin),
-        db: AsyncSession = Depends(get_async_db),
-        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
-        subject: Optional[str] = Query(None, max_length=50),
-        difficulty: Optional[int] = Query(None, ge=1, le=5),
-        task_type: Optional[str] = Query(None, max_length=50),
-        search: Optional[str] = Query(None, max_length=200),
-        skip: int = Query(0, ge=0),
-        limit: int = Query(50, ge=1, le=200),
-        assigned_user_id: Optional[int] = Query(
-            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
-        ),
-):
-    return await _list_admin_tasks(
-        request,
-        response,
-        current_user,
-        db,
-        include_inactive,
-        subject,
-        difficulty,
-        task_type,
-        search,
-        skip,
-        limit,
-        assigned_user_id,
-    )
-
-
-@router.head("/tasks/", include_in_schema=False)
-async def head_admin_tasks_trailing_slash(
-        request: Request,
-        response: Response,
-        current_user: User = Depends(require_admin),
-        db: AsyncSession = Depends(get_async_db),
-        include_inactive: bool = Query(False, description="Возвращать ли неактивные задания"),
-        subject: Optional[str] = Query(None, max_length=50),
-        difficulty: Optional[int] = Query(None, ge=1, le=5),
-        task_type: Optional[str] = Query(None, max_length=50),
-        search: Optional[str] = Query(None, max_length=200),
-        skip: int = Query(0, ge=0),
-        limit: int = Query(50, ge=1, le=200),
-        assigned_user_id: Optional[int] = Query(
-            None, ge=1, description="Вернуть задания, назначенные конкретному ученику"
-        ),
-):
-    return await _list_admin_tasks(
-        request,
-        response,
-        current_user,
-        db,
-        include_inactive,
-        subject,
-        difficulty,
-        task_type,
-        search,
-        skip,
-        limit,
-        assigned_user_id,
-    )
-
-
-@router.options("/tasks", include_in_schema=False)
-@router.options("/tasks/", include_in_schema=False)
-async def admin_tasks_collection_preflight(request: Request) -> Response:
-    allowed_methods = ("GET", "HEAD", "POST", "PATCH", "DELETE")
-    return build_preflight_response(request, allowed_methods)
-
-
-@router.options("/tasks/{path:path}", include_in_schema=False)
-async def admin_tasks_preflight(request: Request, path: Optional[str] = None) -> Response:
-    allowed_methods = ("GET", "HEAD", "POST", "PATCH", "DELETE")
-    return build_preflight_response(request, allowed_methods)
-
 
 
 @router.post("/tasks", response_model=TaskResponse, status_code=status.HTTP_201_CREATED)

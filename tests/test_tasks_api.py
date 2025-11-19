@@ -202,8 +202,9 @@ async def test_admin_task_listing_requires_admin(async_client, seeded_users):
     response = await async_client.get("/api/admin/tasks")
     assert response.status_code == 200
     data = response.json()
-    assert data["total"] == 2
-    titles = {item["title"] for item in data["items"]}
+    assert isinstance(data, list)
+    assert len(data) == 2
+    titles = {item["title"] for item in data}
     assert {"Admin Task", "Teacher Task"} <= titles
 
 
